@@ -319,6 +319,7 @@ export default function CounterpartiesPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+const [quickFilter, setQuickFilter] = useState<'all' | 'head' | 'branches' | 'active'>('all');
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
 
   const [scanProgress, setScanProgress] = useState<{ loaded: number; total: number } | null>(null);
@@ -451,6 +452,38 @@ export default function CounterpartiesPage() {
   }, [matchesText, normalizedSearch]);
 
   const filteredCompanies = useMemo(() => {
+  // quickFilter = 'branches' → показываем филиалы отдельными карточками,
+  // но так как список строится от головных компаний, отфильтруем
+  // только те головные, у которых есть подразделения.
+  if (quickFilter === 'branches') {
+    return headCompanies.filter(company => {
+      const branches = branchesByParent.get(company.id) || [];
+      if (branches.length === 0) return false;
+
+      const matchesType = !typeFilter || branches.some(b => b.counterparty_type === typeFilter);
+      if (!matchesType) return false;
+
+      if (!hasSearch) return true;
+
+      return branches.some(branchMatchesSearch);
+    });
+  }
+
+  if (quickFilter === 'active') {
+    return headCompanies.filter(company => {
+      if (!company.is_active) return false;
+
+      const matchesType = !typeFilter || company.counterparty_type === typeFilter;
+      if (!matchesType) return false;
+
+      if (!hasSearch) return true;
+
+      const branches = branchesByParent.get(company.id) || [];
+      return companyMatchesSearch(company) || branches.some(branchMatchesSearch);
+    });
+  }
+
+  if (quickFilter === 'head') {
     return headCompanies.filter(company => {
       const matchesType = !typeFilter || company.counterparty_type === typeFilter;
       if (!matchesType) return false;
@@ -460,14 +493,27 @@ export default function CounterpartiesPage() {
       const branches = branchesByParent.get(company.id) || [];
       return companyMatchesSearch(company) || branches.some(branchMatchesSearch);
     });
-  }, [
-    headCompanies,
-    branchesByParent,
-    typeFilter,
-    hasSearch,
-    companyMatchesSearch,
-    branchMatchesSearch,
-  ]);
+  }
+
+  // quickFilter === 'all' — обычное поведение
+  return headCompanies.filter(company => {
+    const matchesType = !typeFilter || company.counterparty_type === typeFilter;
+    if (!matchesType) return false;
+
+    if (!hasSearch) return true;
+
+    const branches = branchesByParent.get(company.id) || [];
+    return companyMatchesSearch(company) || branches.some(branchMatchesSearch);
+  });
+}, [
+  headCompanies,
+  branchesByParent,
+  typeFilter,
+  quickFilter,
+  hasSearch,
+  companyMatchesSearch,
+  branchMatchesSearch,
+]);
 
   useEffect(() => {
     if (!hasSearch) return;
@@ -509,12 +555,19 @@ export default function CounterpartiesPage() {
     });
   };
 
-  const resetFilters = () => {
-    setSearch('');
-    setTypeFilter('');
-  };
+ const resetFilters = () => {
+  setSearch('');
+  setTypeFilter('');
+  setQuickFilter('all');
+  setPage(1);
+};
 
-  const hasFilters = !!(search || typeFilter);
+  const handleQuickFilter = (filter: 'all' | 'head' | 'branches' | 'active') => {
+  setQuickFilter(filter);
+  setPage(1);
+};
+
+  const hasFilters = !!(search || typeFilter || quickFilter !== 'all');
 
   const getTypeIcon = (type: string, size: 'sm' | 'md' = 'md') => {
     const cls = size === 'sm' ? 'w-4 h-4' : 'w-6 h-6';
@@ -580,30 +633,58 @@ export default function CounterpartiesPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: isSearchMode ? 'Загружено' : 'На странице',
-            value: counterparties.length,
-            icon: Building2,
-          },
-          { label: 'Головные', value: headCompanies.length, icon: Users },
-          { label: 'Подразделения', value: visibleBranchesCount, icon: GitBranch },
-          { label: 'Активные', value: visibleActiveCount, icon: Check },
-        ].map(stat => (
-          <div
-            key={stat.label}
-            className="glass-card rounded-2xl border border-[var(--border-color)] p-4 flex items-center gap-3.5"
-          >
-            <div className="w-11 h-11 rounded-xl bg-[var(--hover-2)] flex items-center justify-center flex-shrink-0">
-              <stat.icon className="w-5 h-5 text-[var(--text-secondary)]" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-[var(--text-primary)]">{stat.value}</p>
-              <p className="text-sm text-[var(--text-primary)]/40">{stat.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+  {[
+    {
+      key: 'all' as const,
+      label: isSearchMode ? 'Загружено' : 'На странице',
+      value: counterparties.length,
+      icon: Building2,
+    },
+    {
+      key: 'head' as const,
+      label: 'Головные',
+      value: headCompanies.length,
+      icon: Users,
+    },
+    {
+      key: 'branches' as const,
+      label: 'Подразделения',
+      value: visibleBranchesCount,
+      icon: GitBranch,
+    },
+    {
+      key: 'active' as const,
+      label: 'Активные',
+      value: visibleActiveCount,
+      icon: Check,
+    },
+  ].map(stat => {
+    const active = quickFilter === stat.key;
+
+return (
+  <button
+    key={stat.key}
+    type="button"
+    onClick={() => handleQuickFilter(stat.key)}
+    className="
+      glass-card rounded-2xl border p-4 flex items-center gap-3.5 text-left transition-all
+      hover:border-[var(--border-hover)] hover:-translate-y-0.5
+      border-[var(--border-color)]
+    "
+  >
+    <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors bg-[var(--hover-2)]">
+      <stat.icon className="w-5 h-5 text-[var(--text-secondary)]" />
+    </div>
+    <div>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">
+        {stat.value}
+      </p>
+      <p className="text-sm text-[var(--text-primary)]/40">{stat.label}</p>
+    </div>
+  </button>
+);
+  })}
+</div>
 
       {/* Filters */}
       <div className="space-y-4">
@@ -686,6 +767,21 @@ export default function CounterpartiesPage() {
                     </span>
                   </span>
                 )}
+                
+                {quickFilter !== 'all' && (
+  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
+                   bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/15">
+    {quickFilter === 'head' && 'Головные'}
+    {quickFilter === 'branches' && 'Подразделения'}
+    {quickFilter === 'active' && 'Активные'}
+    <span
+      onClick={() => setQuickFilter('all')}
+      className="cursor-pointer text-[var(--accent)]/60 hover:text-[var(--accent)]"
+    >
+      <X size={14} />
+    </span>
+  </span>
+)}
 
                 <button
                   onClick={resetFilters}

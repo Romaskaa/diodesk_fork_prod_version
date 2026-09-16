@@ -4,6 +4,10 @@ from uuid import UUID
 
 from fastapi import Depends, Query
 
+
+from .domain.dtos import ProjectFilters
+from .domain.vo import ProjectStatus
+
 from src.iam.dependencies import CurrentSubjectDep, UserRepoDep
 from src.shared.dependencies import EventPublisherDep, PaginationDep, SessionDep
 from src.shared.domain.exceptions import NotFoundError
@@ -70,10 +74,27 @@ async def get_project_or_404(project_id: UUID, project_repo: ProjectRepoDep) -> 
     return map_project_to_response(project)
 
 
+
+def get_project_filters(
+    counterparty_id: Annotated[UUID | None, Query(description="По контрагенту")] = None,
+    statuses: Annotated[list[ProjectStatus] | None, Query(description="По статусам")] = None,
+    q: Annotated[str | None, Query(description="Поисковый запрос")] = None,
+) -> ProjectFilters:
+    return ProjectFilters(
+        counterparty_id=counterparty_id,
+        statuses=set(statuses) if statuses else None,
+        search_query=q,
+    )
+
+
+ProjectFiltersDep = Annotated[ProjectFilters, Depends(get_project_filters)]
+
 async def get_projects_page(
-        pagination: PaginationDep, project_repo: ProjectRepoDep
+        pagination: PaginationDep,
+        filters: ProjectFiltersDep,
+        project_repo: ProjectRepoDep,
 ) -> Page[ProjectResponse]:
-    page = await project_repo.paginate(pagination)
+    page = await project_repo.paginate(pagination, filters=filters)
     return page.to_response(map_project_to_response)
 
 

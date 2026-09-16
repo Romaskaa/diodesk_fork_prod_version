@@ -437,16 +437,36 @@ export interface AddMembersRequest {
 }
 export const projectsApi = {
   // Получить список проектов (с пагинацией)
-  getAll: async (
-    page: number = 1,
-    size: number = 10,
-    status?: ProjectStatus
-  ): Promise<PaginatedResponse<Project>> => {
-    const response = await api.get<PaginatedResponse<Project>>('/api/v1/projects', {
-      params: { page, size, status },
-    });
-    return response.data;
-  },
+ getAll: async (
+  page: number = 1,
+  size: number = 10,
+  filters?: {
+    counterparty_id?: string;
+    statuses?: string[];
+    q?: string;
+  }
+): Promise<PaginatedResponse<Project>> => {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+
+  if (filters?.counterparty_id) {
+    params.set('counterparty_id', filters.counterparty_id);
+  }
+
+  if (filters?.statuses?.length) {
+    filters.statuses.forEach((s) => params.append('statuses', s));
+  }
+
+  if (filters?.q) {
+    params.set('q', filters.q);
+  }
+
+  const response = await api.get<PaginatedResponse<Project>>(
+    `/api/v1/projects?${params.toString()}`
+  );
+  return response.data;
+},
 
   // Получить проект по ID
   getById: async (id: string): Promise<Project> => {

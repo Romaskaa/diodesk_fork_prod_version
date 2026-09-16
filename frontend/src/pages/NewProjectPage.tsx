@@ -1,9 +1,9 @@
 // pages/NewProjectPage.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Loader2, Building2, CheckCircle2, User, Crown, 
-  Sparkles, AlertCircle, CheckCircle, XCircle, ChevronDown
+import {
+  ArrowLeft, Loader2, Building2, CheckCircle2, User, Crown,
+  Sparkles, AlertCircle, CheckCircle, XCircle, ChevronDown, X, ArrowRight
 } from 'lucide-react';
 import { projectsApi, counterpartiesApi, usersApi } from '../api/client';
 import { useAuthStore } from '../stores/authStore';
@@ -22,7 +22,7 @@ export default function NewProjectPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { toast } = useToast();
-  
+
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
@@ -32,7 +32,7 @@ export default function NewProjectPage() {
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  
+
   // AI состояния
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -41,20 +41,20 @@ export default function NewProjectPage() {
     available: boolean;
     suggestions: string[];
   } | null>(null);
-  
+
   // Для выбора владельца проекта
   const [users, setUsers] = useState<SimpleUser[]>([]);
   const [selectedOwner, setSelectedOwner] = useState<SimpleUser | null>(null);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
-  
+
   const counterpartyDropdownRef = useRef<HTMLDivElement>(null);
   const ownerDropdownRef = useRef<HTMLDivElement>(null);
 
   // 🔥 ИСПРАВЛЕНО: проверка роли через массив
-  const isSupport = user?.roles?.some(r => 
-    r === 'support_agent' || 
-    r === 'support_manager' || 
+  const isSupport = user?.roles?.some(r =>
+    r === 'support_agent' ||
+    r === 'support_manager' ||
     r === 'admin'
   ) ?? false;
 
@@ -146,7 +146,7 @@ export default function NewProjectPage() {
         email: customer.email,
         role: customer.role,
       }));
-      
+
       // 🔥 ИСПРАВЛЕНО: используем user?.id вместо user?.user_id
       const currentUserObj: SimpleUser = {
         id: user?.id || '',
@@ -155,19 +155,19 @@ export default function NewProjectPage() {
         email: user?.email || '',
         role: user?.roles?.[0] || 'admin',
       };
-      
+
       // Всегда добавляем текущего пользователя в начало списка
       let allUsers: SimpleUser[] = [currentUserObj];
-      
+
       // Добавляем остальных пользователей, исключая дубликат текущего
       const otherUsers = formattedUsers.filter(u => u.id !== user?.id);
       allUsers = [...allUsers, ...otherUsers];
-      
+
       setUsers(allUsers);
-      
+
       // ВСЕГДА ВЫБИРАЕМ ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ ПО УМОЛЧАНИЮ
       setSelectedOwner(currentUserObj);
-      
+
     } catch (error) {
       console.error('Failed to load users:', error);
       // При ошибке всё равно устанавливаем текущего пользователя
@@ -291,7 +291,7 @@ export default function NewProjectPage() {
         counterparty_id: counterpartyId,
         owner_id: selectedOwner.id,
       });
-      
+
       toast({ title: 'Успешно', description: 'Проект создан' });
       navigate('/projects');
     } catch (error: any) {
@@ -336,275 +336,317 @@ export default function NewProjectPage() {
   return (
     <div className="max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex items-center gap-6 mb-8">
-        <button
-          onClick={() => navigate('/projects')}
-          className="p-3 rounded-xl bg-[var(--hover-1)] hover:bg-[var(--hover-1)] transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6 text-[var(--text-primary)]" />
-        </button>
-        <div>
-          <h1 className="text-4xl font-bold text-[var(--text-primary)]">Создание проекта</h1>
-          <p className="text-[var(--text-primary)]/60 mt-1">Новый проект для контрагента</p>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-6">
+          <button
+            type="button"
+            onClick={() => navigate('/projects')}
+            className="p-3 rounded-xl bg-[var(--hover-1)] hover:bg-[var(--hover-2)] transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6 text-[var(--text-primary)]" />
+          </button>
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-[var(--text-primary)]">
+              Создание проекта
+            </h1>
+            <p className="text-base text-[var(--text-primary)]/50 mt-1">
+              Новый проект для контрагента
+            </p>
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/projects')}
+          aria-label="Закрыть"
+          className="p-2.5 rounded-xl text-[var(--text-primary)]/45
+               transition-colors hover:bg-[var(--hover-2)] hover:text-[var(--text-primary)]"
+        >
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="glass-card p-8 space-y-8">
+      <form onSubmit={handleSubmit} className="glass-card rounded-2xl border border-[var(--border-color)] p-6 sm:p-8 space-y-8">
+        {/* ═══ Секция 1: Основное ═══ */}
+        <section className="space-y-5">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-1 h-5 rounded-full bg-[var(--accent)]" />
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Основное</h2>
+          </div>
 
-        {/* Организация */}
-        <div>
-          <label className="block text-lg font-semibold text-[var(--text-primary)] mb-2">
-            Контрагент <span className="text-[var(--accent)]">*</span>
-          </label>
-          <div className="relative" ref={counterpartyDropdownRef}>
-            <div className="relative">
-              <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-primary)]/40" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Поиск контрагента..."
-                style={{ paddingLeft: '3.5rem' }}
-                className="input-field py-4 text-lg w-full"
-              />
-            </div>
-            
-            {showDropdown && (
-              <div className="absolute z-50 mt-2 w-full bg-[var(--bg-primary)] border border-white/20 rounded-xl shadow-2xl max-h-80 overflow-y-auto">
-                {loading ? (
-                  <div className="p-8 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-[var(--text-primary)]/50" />
-                    <p className="text-[var(--text-primary)]/50 mt-3">Загрузка контрагента...</p>
+          {/* Контрагент */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-2">
+              Контрагент <span className="text-red-400">*</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1" ref={counterpartyDropdownRef}>
+                <div className="relative">
+                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-primary)]/40 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder="Поиск контрагента..."
+                    style={{ paddingLeft: '3.5rem' }}
+                    className="input-field w-full py-3.5 text-base"
+                  />
+                </div>
+
+                {showDropdown && (
+                  <div className="absolute z-50 mt-2 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-80 overflow-y-auto">
+                    {loading ? (
+                      <div className="p-6 text-center">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-[var(--text-primary)]/40" />
+                        <p className="text-sm text-[var(--text-primary)]/45 mt-2">Загрузка...</p>
+                      </div>
+                    ) : filteredCounterparties.length === 0 ? (
+                      <div className="p-6 text-center">
+                        <Building2 className="w-10 h-10 mx-auto mb-2 text-[var(--text-primary)]/20" />
+                        <p className="text-sm text-[var(--text-primary)]/50">Ничего не найдено</p>
+                      </div>
+                    ) : (
+                      filteredCounterparties.map((cp) => (
+                        <button
+                          key={cp.id}
+                          type="button"
+                          onClick={() => {
+                            setCounterpartyId(cp.id);
+                            setSearch(getCounterpartyDisplay(cp));
+                            setShowDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-[var(--hover-1)] transition-colors border-b border-[var(--border-color)] last:border-0"
+                        >
+                          <div className="font-medium text-[var(--text-primary)] text-sm">
+                            {getCounterpartyDisplay(cp)}
+                          </div>
+                          {cp.legal_name && cp.legal_name !== cp.name && (
+                            <div className="text-xs text-[var(--text-primary)]/50 mt-0.5">
+                              {cp.legal_name}
+                            </div>
+                          )}
+                          {cp.inn && (
+                            <div className="text-xs text-[var(--text-primary)]/40 mt-0.5 font-mono">
+                              ИНН: {cp.inn}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    )}
                   </div>
-                ) : filteredCounterparties.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <Building2 className="w-12 h-12 mx-auto mb-3 text-[var(--text-primary)]/20" />
-                    <p className="text-[var(--text-primary)]/50 text-lg">Ничего не найдено</p>
-                  </div>
-                ) : (
-                  filteredCounterparties.map((cp) => (
-                    <button
-                      key={cp.id}
-                      type="button"
-                      onClick={() => {
-                        setCounterpartyId(cp.id);
-                        setSearch(getCounterpartyDisplay(cp));
-                        setShowDropdown(false);
-                      }}
-                      className="w-full text-left p-5 hover:bg-[var(--hover-1)] transition-colors border-b border-white/10 last:border-0"
-                    >
-                      <div className="font-semibold text-[var(--text-primary)] text-base">{getCounterpartyDisplay(cp)}</div>
-                      {cp.legal_name && cp.legal_name !== cp.name && (
-                        <div className="text-sm text-[var(--text-primary)]/50 mt-1">{cp.legal_name}</div>
-                      )}
-                      {cp.inn && <div className="text-xs text-[var(--text-primary)]/40 mt-1">ИНН: {cp.inn}</div>}
-                    </button>
-                  ))
                 )}
               </div>
-            )}
-          </div>
-          {counterpartyId && (
-            <div className="mt-4 p-4 rounded-xl bg-[var(--success)]/8 border border-green-500/30 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-[var(--success)]" />
-              <span className="text-[var(--text-primary)]">Контрагент выбран</span>
-            </div>
-          )}
-        </div>
 
-        {/* Название проекта с AI помощником */}
-        <div>
-          <label className="block text-lg font-semibold text-[var(--text-primary)] mb-2">
-            Название проекта <span className="text-[var(--accent)]">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Например: Корпоративный сайт компании"
-              className="input-field py-4 text-lg w-full pr-12"
-              required
-            />
-            {aiLoading && (
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="w-5 h-5 text-[var(--info)] animate-spin" />
-              </div>
-            )}
-            {!aiLoading && aiSuggestion && name && (
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                <CheckCircle2 className="w-5 h-5 text-[var(--info)]" />
-              </div>
-            )}
-          </div>
-          
-          {/* AI подсказка */}
-          {aiSuggestion && name && !aiLoading && (
-            <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-blue-500/10 border border-blue-500/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--info)]" />
-                  <span className="text-[var(--text-primary)]">Предложенный ключ:</span>
-                  <span className="text-[var(--info)] font-mono font-bold text-lg">{aiSuggestion}</span>
-                </div>
+              {/* Проформа: Перейти к контрагенту */}
+              {counterpartyId && (
                 <button
                   type="button"
-                  onClick={() => setKey(aiSuggestion)}
-                  className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-[var(--text-primary)] text-sm transition-colors"
+                  onClick={() => navigate(`/counterparties/${counterpartyId}`)}
+                  title="Перейти к контрагенту"
+                  className="flex h-[52px] w-[52px] shrink-0 items-center justify-center
+                       rounded-xl border border-[var(--border-color)]
+                       bg-[var(--hover-1)] text-[var(--text-primary)]/60
+                       transition-colors hover:bg-[var(--hover-2)] hover:text-[var(--accent)]"
                 >
-                  Использовать
+                  <ArrowRight className="h-5 w-5" />
                 </button>
-              </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Ключ проекта с проверкой доступности */}
-        <div>
-          <label className="block text-lg font-semibold text-[var(--text-primary)] mb-2">
-            Ключ проекта <span className="text-[var(--accent)]">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value.toUpperCase())}
-              placeholder="Например: PROJ"
-              className={`input-field py-4 text-lg w-full font-mono pr-12 ${getKeyInputBorderClass()}`}
-              required
-              maxLength={10}
-            />
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-              {getKeyStatusIcon()}
-            </div>
-          </div>
-          
-          <p className="text-[var(--text-primary)]/40 text-sm mt-1">
-            Уникальный идентификатор проекта. 2-10 символов, начинается с буквы, только буквы, цифры или подчёркивания
-          </p>
-          
-          {/* Ошибка валидации ключа */}
-          {key && !isValidKey(key) && (
-            <div className="mt-3 p-4 rounded-xl bg-[var(--accent-soft)] border border-[var(--accent)]/15">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-[var(--accent)] mt-0.5" />
-                <div>
-                  <p className="text-[var(--accent)] font-medium">Неверный формат ключа</p>
-                  <p className="text-[var(--text-primary)]/70 text-sm">
-                    Ключ должен быть 2-10 символов, начинаться с буквы и содержать только буквы, цифры или подчёркивания
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Статус доступности ключа */}
-          {key && isValidKey(key) && keyAvailability && !keyAvailability.available && (
-            <div className="mt-3 p-4 rounded-xl bg-[var(--accent-soft)] border border-[var(--accent)]/15">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-[var(--accent)] mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-[var(--accent)] font-medium">Ключ уже занят</p>
-                  {keyAvailability.suggestions && keyAvailability.suggestions.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-[var(--text-primary)]/70 text-sm mb-2">Предлагаем альтернативы:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {keyAvailability.suggestions.slice(0, 5).map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            type="button"
-                            onClick={() => applySuggestion(suggestion)}
-                            className="px-3 py-1.5 rounded-lg bg-[var(--hover-1)] hover:bg-[var(--hover-1)] text-[var(--text-primary)] text-sm transition-colors font-mono"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {key && isValidKey(key) && keyAvailability?.available && (
-            <div className="mt-3 p-3 rounded-xl bg-[var(--success)]/8 border border-green-500/30 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[var(--success)]" />
-              <span className="text-[var(--success)] text-sm">Ключ доступен</span>
-            </div>
-          )}
-        </div>
-
-        {/* Владелец проекта (Инициатор) */}
-        {counterpartyId && (
-          <div>
-            <label className="block text-lg font-semibold text-[var(--text-primary)] mb-2">
-              <Crown className="inline w-5 h-5 mr-2 text-[var(--warning)]" />
-              Владелец проекта <span className="text-[var(--accent)]">*</span>
-            </label>
-            
-            {/* Отображение выбранного владельца */}
-            {selectedOwner && (
-              <div className="mb-3 p-4 rounded-xl bg-[var(--success)]/8 border border-green-500/30">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[var(--success)] flex items-center justify-center">
-                      {selectedOwner.id === user?.id ? (
-                        <User className="w-5 h-5 text-[var(--text-primary)]" />
-                      ) : (
-                        <Crown className="w-5 h-5 text-[var(--text-primary)]" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-[var(--text-primary)] font-medium">
-                        {getUserDisplayName(selectedOwner)}
-                        {selectedOwner.id === user?.id && (
-                          <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-[var(--success)]/8 text-[var(--success)]">
-                            Вы (владелец по умолчанию)
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-[var(--text-primary)]/50">{selectedOwner.email}</div>
-                    </div>
-                  </div>
-                  
-                  {/* Кнопка смены владельца */}
-                  <button
-                    type="button"
-                    onClick={() => setShowOwnerDropdown(!showOwnerDropdown)}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--hover-1)] hover:bg-[var(--hover-1)] text-[var(--text-primary)] text-sm transition-colors flex items-center gap-1"
-                  >
-                    {showOwnerDropdown ? 'Скрыть' : 'Изменить'}
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showOwnerDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                </div>
+            {counterpartyId && (
+              <div className="mt-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-[var(--text-primary)]/70">Контрагент выбран</span>
               </div>
             )}
-            
-            {/* Выпадающий список для смены владельца */}
+          </div>
+
+          {/* Название + Ключ — в две колонки */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            {/* Название */}
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-2">
+                Название проекта <span className="text-red-400">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Например: Корпоративный сайт"
+                  className="input-field w-full py-3.5 text-base pr-11"
+                  required
+                />
+                {aiLoading && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                  </div>
+                )}
+                {!aiLoading && aiSuggestion && name && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <CheckCircle2 className="w-5 h-5 text-blue-400" />
+                  </div>
+                )}
+              </div>
+
+              {aiSuggestion && name && !aiLoading && (
+                <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/25">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span className="text-sm text-[var(--text-primary)]/70 truncate">
+                      Ключ: <span className="font-mono font-semibold text-blue-400">{aiSuggestion}</span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setKey(aiSuggestion)}
+                    className="text-xs px-2 py-1 rounded-md bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 transition-colors shrink-0"
+                  >
+                    Использовать
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Ключ */}
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-2">
+                Ключ проекта <span className="text-red-400">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value.toUpperCase())}
+                  placeholder="PROJ"
+                  className={`input-field w-full py-3.5 text-base font-mono pr-11 ${getKeyInputBorderClass()}`}
+                  required
+                  maxLength={10}
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  {getKeyStatusIcon()}
+                </div>
+              </div>
+              <p className="text-xs text-[var(--text-primary)]/40 mt-1.5">
+                2-10 символов, начинается с буквы
+              </p>
+
+              {key && !isValidKey(key) && (
+                <div className="mt-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-300">Неверный формат ключа</p>
+                </div>
+              )}
+
+              {key && isValidKey(key) && keyAvailability && !keyAvailability.available && (
+                <div className="mt-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-red-300 mb-1.5">Ключ занят</p>
+                      {keyAvailability.suggestions?.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {keyAvailability.suggestions.slice(0, 4).map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => applySuggestion(suggestion)}
+                              className="px-2 py-1 rounded bg-[var(--hover-2)] hover:bg-[var(--hover-3)] text-[var(--text-primary)] text-xs transition-colors font-mono"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {key && isValidKey(key) && keyAvailability?.available && (
+                <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs text-emerald-300">Ключ доступен</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══ Секция 2: Владелец ═══ */}
+        {counterpartyId && (
+          <section className="space-y-5 pt-6 border-t border-[var(--border-color)]">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-1 h-5 rounded-full bg-amber-400" />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                Владелец проекта
+              </h2>
+            </div>
+
+            {selectedOwner && (
+              <div className="flex items-center gap-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+                  {selectedOwner.id === user?.id ? (
+                    <User className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <Crown className="w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      {getUserDisplayName(selectedOwner)}
+                    </span>
+                    {selectedOwner.id === user?.id && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">
+                        По умолчанию
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-[var(--text-primary)]/50 truncate">
+                    {selectedOwner.email}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowOwnerDropdown(!showOwnerDropdown)}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--hover-2)] hover:bg-[var(--hover-3)] text-[var(--text-primary)]/70 text-sm transition-colors shrink-0 flex items-center gap-1"
+                >
+                  {showOwnerDropdown ? 'Скрыть' : 'Изменить'}
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showOwnerDropdown ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            )}
+
             {showOwnerDropdown && (
               <div className="relative" ref={ownerDropdownRef}>
-                <div className="absolute z-50 mt-0 w-full bg-[var(--bg-primary)] border border-white/20 rounded-xl shadow-2xl max-h-80 overflow-y-auto">
+                <div className="absolute z-50 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-80 overflow-y-auto">
                   {loadingUsers ? (
-                    <div className="p-8 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-[var(--text-primary)]/50" />
-                      <p className="text-[var(--text-primary)]/50 mt-3">Загрузка пользователей...</p>
+                    <div className="p-6 text-center">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-[var(--text-primary)]/40" />
+                      <p className="text-sm text-[var(--text-primary)]/45 mt-2">Загрузка...</p>
                     </div>
                   ) : users.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <User className="w-12 h-12 mx-auto mb-3 text-[var(--text-primary)]/20" />
-                      <p className="text-[var(--text-primary)]/50 text-lg">Нет пользователей</p>
-                      <p className="text-[var(--text-primary)]/40 text-sm mt-1">Вы будете владельцем проекта</p>
+                    <div className="p-6 text-center">
+                      <User className="w-10 h-10 mx-auto mb-2 text-[var(--text-primary)]/20" />
+                      <p className="text-sm text-[var(--text-primary)]/50">Нет пользователей</p>
+                      <p className="text-xs text-[var(--text-primary)]/40 mt-1">
+                        Вы будете владельцем проекта
+                      </p>
                     </div>
                   ) : (
                     users.map((u) => {
                       const isCurrentUser = u.id === user?.id;
                       const isSelected = selectedOwner?.id === u.id;
-                      
+
                       return (
                         <button
                           key={u.id}
@@ -613,42 +655,39 @@ export default function NewProjectPage() {
                             setSelectedOwner(u);
                             setShowOwnerDropdown(false);
                           }}
-                          className={`w-full text-left p-4 hover:bg-[var(--hover-1)] transition-colors border-b border-white/10 last:border-0 ${
-                            isSelected ? 'bg-[var(--success)]/8' : ''
-                          } ${
-                            isCurrentUser ? 'bg-[var(--success)]/5' : ''
-                          }`}
+                          className={`w-full text-left px-4 py-3 hover:bg-[var(--hover-1)] transition-colors border-b border-[var(--border-color)] last:border-0 ${isSelected ? 'bg-emerald-500/[0.06]' : ''
+                            }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              isCurrentUser 
-                                ? 'bg-[var(--success)]'
-                                : 'bg-[var(--warning)]'
-                            }`}>
+                            <div className="w-9 h-9 rounded-full bg-[var(--hover-2)] flex items-center justify-center shrink-0">
                               {isCurrentUser ? (
-                                <User className="w-5 h-5 text-[var(--text-primary)]" />
+                                <User className="w-4 h-4 text-emerald-400" />
                               ) : (
-                                <Crown className="w-5 h-5 text-[var(--text-primary)]" />
+                                <Crown className="w-4 h-4 text-amber-400" />
                               )}
                             </div>
-                            <div className="flex-1">
-                              <div className="font-semibold text-[var(--text-primary)]">
-                                {getUserDisplayName(u)}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                                  {getUserDisplayName(u)}
+                                </span>
                                 {isCurrentUser && (
-                                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-[var(--success)]/8 text-[var(--success)]">
-                                    Вы (по умолчанию)
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                    Вы
                                   </span>
                                 )}
                                 {!isCurrentUser && u.role === 'customer_admin' && (
-                                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-[var(--info)]">
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">
                                     Админ
                                   </span>
                                 )}
                               </div>
-                              <div className="text-sm text-[var(--text-primary)]/50">{u.email}</div>
+                              <div className="text-xs text-[var(--text-primary)]/50 truncate">
+                                {u.email}
+                              </div>
                             </div>
                             {isSelected && (
-                              <CheckCircle2 className="w-5 h-5 text-[var(--success)]" />
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                             )}
                           </div>
                         </button>
@@ -658,45 +697,44 @@ export default function NewProjectPage() {
                 </div>
               </div>
             )}
-
-            {/* Информация о владельце по умолчанию */}
-            {selectedOwner && selectedOwner.id === user?.id && !showOwnerDropdown && (
-              <div className="mt-2 text-xs text-[var(--success)]/60">
-                Вы назначены владельцем проекта по умолчанию
-              </div>
-            )}
-          </div>
+          </section>
         )}
 
-        {/* Описание */}
-        <div>
-          <label className="block text-lg font-semibold text-[var(--text-primary)] mb-2">
-            Описание проекта
-          </label>
+        {/* ═══ Секция 3: Описание ═══ */}
+        <section className="space-y-5 pt-6 border-t border-[var(--border-color)]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-1 h-5 rounded-full bg-blue-400" />
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Описание</h2>
+          </div>
+
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Опишите цели и задачи проекта..."
             rows={5}
-            className="input-field py-4 text-lg resize-none w-full"
+            className="input-field w-full py-3.5 text-base resize-none"
           />
-        </div>
+        </section>
 
         {/* Кнопки */}
-        <div className="flex justify-end gap-4 pt-4 border-t border-white/10">
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-[var(--border-color)]">
           <button
             type="button"
             onClick={() => navigate('/projects')}
-            className="px-6 py-3 rounded-xl bg-[var(--hover-1)] hover:bg-[var(--hover-1)] text-[var(--text-primary)] font-medium transition-colors"
+            className="px-5 py-3 rounded-xl bg-[var(--hover-2)] hover:bg-[var(--hover-3)] text-[var(--text-primary)]/70 text-sm font-medium transition-colors"
           >
             Отмена
           </button>
           <button
             type="submit"
             disabled={submitting || !name || !key || !counterpartyId || !selectedOwner || !isValidKey(key) || (keyAvailability && !keyAvailability.available)}
-            className="btn-primary px-8 py-3 text-lg font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary px-6 py-3 text-sm font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+            {submitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
             Создать проект
           </button>
         </div>

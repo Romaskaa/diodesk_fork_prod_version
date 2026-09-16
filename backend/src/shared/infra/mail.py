@@ -36,7 +36,13 @@ class MailSender(Protocol):
 
 class SmtpMailSender:
     def __init__(self, smtp_host: str, smtp_port: int, use_tls: bool = True) -> None:
-        self.smtp_config = {"hostname": smtp_host, "port": smtp_port, "use_tls": use_tls}
+        self.smtp_config = {
+            "hostname": smtp_host,
+            "port": smtp_port,
+            "use_tls": use_tls,
+            "username": settings.mail.smtp_user or None,
+            "password": settings.mail.smtp_password or None,
+        }
 
     async def send(
         self,

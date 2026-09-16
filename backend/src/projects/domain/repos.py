@@ -2,6 +2,8 @@ from typing import override
 
 from uuid import UUID
 
+from .dtos import ProjectFilters
+
 from src.shared.domain.repos import Repository
 from src.shared.schemas import Page, Pagination
 
@@ -10,6 +12,12 @@ from .vo import ProjectKey, MemberRole
 
 
 class ProjectRepository(Repository[Project]):
+
+
+    @override
+    async def paginate(
+        self, pagination: Pagination, filters: ProjectFilters | None = None,
+    ) -> Page[Project]: ...
 
     async def get_by_key(self, key: ProjectKey) -> Project | None:
         """Получение проекта по его уникальному ключу"""
@@ -52,3 +60,4 @@ class ProjectMemberRepository(Repository[ProjectMember]):
         """ 
     async def list_by_project(self, project_id: UUID) -> list[ProjectMember]:
         """Получить всех участников проекта."""
+

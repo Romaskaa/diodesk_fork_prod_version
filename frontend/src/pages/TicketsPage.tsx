@@ -1,5 +1,5 @@
 // pages/TicketsPage.tsx
-import { useState, useEffect, useRef, useCallback,useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ElementType, ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -8,7 +8,7 @@ import {
   Building2, User, X, SlidersHorizontal, ChevronDown, Check,
   Sparkles, Flame, MessageSquare, HelpCircle, Edit3, FolderOpen,
   UserCheck, Ticket, MoreVertical,
-  Settings, RefreshCw, Archive, Paperclip,LayoutGrid, List,
+  Settings, RefreshCw, Archive, Paperclip, LayoutGrid, List,
 } from 'lucide-react';
 import { ticketsApi, counterpartiesApi, projectsApi, usersApi } from '../api/client';
 import { useAuthStore } from '../stores/authStore';
@@ -377,15 +377,15 @@ function FilterDropdown({
 /* ═══ STAT CARD ═══ */
 
 function StatCard({ label, value, icon: Icon, color, bg, onClick }: {
-  label: string; 
-  value: number; 
-  icon: ElementType; 
-  color: string; 
+  label: string;
+  value: number;
+  icon: ElementType;
+  color: string;
   bg: string;
   onClick?: () => void;
 }) {
   return (
-    <div 
+    <div
       onClick={onClick}
       className={`rounded-xl border border-[var(--border-color)] p-4 flex items-center gap-3
         hover:border-[var(--border-hover)] hover:-translate-y-0.5 transition-all duration-200
@@ -420,8 +420,6 @@ function FilterTag({ label, icon, colorClass, onRemove }: {
   );
 }
 
-/* ═══ TICKET ACTIONS (троеточие) ═══ */
-
 function TicketActions({
   ticket,
   onTicketUpdated,
@@ -445,13 +443,99 @@ function TicketActions({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
 
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null); // контейнер кнопки
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Закрытие кликом снаружи                                               */
-  /* ────────────────────────────────────────────────────────────────────── */
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setShowAssigneeMenu(false);
+    setMenuStyle(null);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Позиционирование меню (portal + fixed)
+  // ---------------------------------------------------------------------------
+
+  const recalcMenu = useCallback(() => {
+    const btn = buttonRef.current;
+    const menu = menuRef.current;
+
+    if (!btn) return;
+
+    const btnRect = btn.getBoundingClientRect();
+
+    const MENU_W = 270;
+    const GAP = 8;
+    const PAD = 8;
+
+    // если меню уже в DOM — берём реальную высоту, иначе fallback
+    const menuH = menu?.offsetHeight ?? 320;
+
+    const spaceBelow = window.innerHeight - btnRect.bottom - GAP;
+    const spaceAbove = btnRect.top - GAP;
+
+    const shouldOpenUp = menuH > spaceBelow && spaceAbove > spaceBelow;
+
+    let top = shouldOpenUp
+      ? btnRect.top - menuH - GAP
+      : btnRect.bottom + GAP;
+
+    let left = btnRect.right - MENU_W;
+
+    // clamp по экрану
+    left = Math.max(PAD, Math.min(left, window.innerWidth - MENU_W - PAD));
+    top = Math.max(PAD, Math.min(top, window.innerHeight - menuH - PAD));
+
+    setOpenUp(shouldOpenUp);
+    setMenuStyle({
+      position: 'fixed',
+      top,
+      left,
+      width: MENU_W,
+      zIndex: 2500,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // 1) первичный расчёт
+    recalcMenu();
+
+    // 2) ещё раз после отрисовки (чтобы высота меню была реальная)
+    const raf = requestAnimationFrame(() => recalcMenu());
+
+    return () => cancelAnimationFrame(raf);
+  }, [open, showAssigneeMenu, recalcMenu]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onAnyScrollOrResize = (e: Event) => {
+      const target = e.target;
+
+      // если скроллят внутри самого меню — не пересчитываем
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+
+      recalcMenu();
+    };
+
+    // capture=true, чтобы ловить скролл внутри колонок/контейнеров канбана
+    window.addEventListener('scroll', onAnyScrollOrResize, true);
+    window.addEventListener('resize', onAnyScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', onAnyScrollOrResize, true);
+      window.removeEventListener('resize', onAnyScrollOrResize);
+    };
+  }, [open, recalcMenu]);
+
+  // ---------------------------------------------------------------------------
+  // Закрытие кликом снаружи (учитываем portal)
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!open) return;
@@ -459,136 +543,40 @@ function TicketActions({
     const handler = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      if (ref.current?.contains(target)) {
-        return;
-      }
+      const inButton = ref.current?.contains(target);
+      const inMenu = menuRef.current?.contains(target);
 
-      setOpen(false);
-      setShowAssigneeMenu(false);
+      if (inButton || inMenu) return;
+
+      closeMenu();
     };
 
     document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open, closeMenu]);
 
-    return () => {
-      document.removeEventListener('mousedown', handler);
-    };
-  }, [open]);
-
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Закрытие по Escape                                                    */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Закрытие по Escape
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!open) return;
 
     const handler = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-
-      setOpen(false);
-      setShowAssigneeMenu(false);
+      closeMenu();
     };
 
     document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, closeMenu]);
 
-    return () => {
-      document.removeEventListener('keydown', handler);
-    };
-  }, [open]);
-
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* После открытия проверяем реальную высоту меню                         */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Исполнители
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!open) return;
-
-    const button = buttonRef.current;
-    const menu = menuRef.current;
-
-    if (!button || !menu) return;
-
-    const buttonRect = button.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-
-    const gap = 8;
-
-    const spaceBelow =
-      window.innerHeight -
-      buttonRect.bottom -
-      gap;
-
-    const spaceAbove =
-      buttonRect.top -
-      gap;
-
-    /*
-     * Используем реальную высоту меню.
-     *
-     * Если вниз оно не помещается,
-     * а сверху места больше — открываем вверх.
-     */
-    const shouldOpenUp =
-      menuRect.height > spaceBelow &&
-      spaceAbove > spaceBelow;
-
-    if (shouldOpenUp !== openUp) {
-      setOpenUp(shouldOpenUp);
-    }
-  }, [open, showAssigneeMenu, openUp]);
-
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* При scroll закрываем меню                                             */
-  /* ────────────────────────────────────────────────────────────────────── */
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleScroll = (event: Event) => {
-      const target = event.target;
-
-      /*
-       * Если скролл произошёл внутри самого меню
-       * (например, пользователь листает исполнителей),
-       * ничего не закрываем.
-       */
-      if (
-        target instanceof Node &&
-        menuRef.current?.contains(target)
-      ) {
-        return;
-      }
-
-      /*
-       * Скролл произошёл снаружи:
-       * например, прокручивается страница.
-       */
-      setOpen(false);
-      setShowAssigneeMenu(false);
-    };
-
-    window.addEventListener(
-      'scroll',
-      handleScroll,
-      true,
-    );
-
-    return () => {
-      window.removeEventListener(
-        'scroll',
-        handleScroll,
-        true,
-      );
-    };
-  }, [open]);
-
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Исполнители                                                           */
-  /* ────────────────────────────────────────────────────────────────────── */
-
-  useEffect(() => {
-    if (!showAssigneeMenu || supportUsers.length > 0) {
-      return;
-    }
+    if (!showAssigneeMenu || supportUsers.length > 0) return;
 
     setLoadingUsers(true);
 
@@ -597,12 +585,7 @@ function TicketActions({
       .then((res) => {
         const staff = res.items.filter((user) =>
           user.roles?.some((role) =>
-            [
-              'admin',
-              'support_agent',
-              'support_manager',
-              'executor',
-            ].includes(role),
+            ['admin', 'support_agent', 'support_manager', 'executor'].includes(role),
           ),
         );
 
@@ -615,14 +598,12 @@ function TicketActions({
           variant: 'destructive',
         }),
       )
-      .finally(() => {
-        setLoadingUsers(false);
-      });
+      .finally(() => setLoadingUsers(false));
   }, [showAssigneeMenu, supportUsers.length, toast]);
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Архив                                                                 */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Архив
+  // ---------------------------------------------------------------------------
 
   const handleArchive = async () => {
     setArchiving(true);
@@ -630,22 +611,16 @@ function TicketActions({
     try {
       await ticketsApi.archiveTicket(ticket.id);
 
-      toast({
-        title: 'Заявка архивирована',
-      });
+      toast({ title: 'Заявка архивирована' });
 
       setShowArchiveConfirm(false);
-      setOpen(false);
-      setShowAssigneeMenu(false);
+      closeMenu();
 
       onTicketUpdated?.();
     } catch (error: any) {
       toast({
         title: 'Ошибка',
-        description:
-          error?.response?.status === 403
-            ? 'Нет прав'
-            : 'Не удалось архивировать',
+        description: error?.response?.status === 403 ? 'Нет прав' : 'Не удалось архивировать',
         variant: 'destructive',
       });
     } finally {
@@ -653,36 +628,27 @@ function TicketActions({
     }
   };
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Статус                                                                */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Статус
+  // ---------------------------------------------------------------------------
 
   const handleStatusChange = async (status: string) => {
     setUpdatingStatus(true);
 
     try {
-      await ticketsApi.updateTicketStatus(
-        ticket.id,
-        status as any,
-      );
+      await ticketsApi.updateTicketStatus(ticket.id, status as any);
 
       toast({
         title: 'Статус обновлён',
-        description:
-          STATUS_MAP[status]?.label || status,
+        description: STATUS_MAP[status]?.label || status,
       });
 
-      setOpen(false);
-      setShowAssigneeMenu(false);
-
+      closeMenu();
       onTicketUpdated?.();
     } catch (error: any) {
       toast({
         title: 'Ошибка',
-        description:
-          error?.response?.status === 403
-            ? 'Нет прав'
-            : 'Не удалось обновить статус',
+        description: error?.response?.status === 403 ? 'Нет прав' : 'Не удалось обновить статус',
         variant: 'destructive',
       });
     } finally {
@@ -690,38 +656,26 @@ function TicketActions({
     }
   };
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Исполнитель                                                           */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Исполнитель
+  // ---------------------------------------------------------------------------
 
-  const handleAssigneeChange = async (
-    userId: string | null,
-  ) => {
+  const handleAssigneeChange = async (userId: string | null) => {
     setUpdatingAssignee(true);
 
     try {
-      await ticketsApi.assignTicket(
-        ticket.id,
-        userId || '',
-      );
+      await ticketsApi.assignTicket(ticket.id, userId || '');
 
       toast({
-        title: userId
-          ? 'Исполнитель назначен'
-          : 'Исполнитель снят',
+        title: userId ? 'Исполнитель назначен' : 'Исполнитель снят',
       });
 
-      setOpen(false);
-      setShowAssigneeMenu(false);
-
+      closeMenu();
       onTicketUpdated?.();
     } catch (error: any) {
       toast({
         title: 'Ошибка',
-        description:
-          error?.response?.status === 403
-            ? 'Нет прав'
-            : 'Не удалось назначить исполнителя',
+        description: error?.response?.status === 403 ? 'Нет прав' : 'Не удалось назначить исполнителя',
         variant: 'destructive',
       });
     } finally {
@@ -729,103 +683,39 @@ function TicketActions({
     }
   };
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Доступные переходы                                                    */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Доступные переходы
+  // ---------------------------------------------------------------------------
 
-  const getAvailableStatuses = (
-    currentStatus: string,
-  ): string[] => {
+  const getAvailableStatuses = (currentStatus: string): string[] => {
     const transitions: Record<string, string[]> = {
-      new: [
-        'pending_approval',
-        'canceled',
-      ],
-
-      pending_approval: [
-        'open',
-        'rejected',
-      ],
-
-      open: [
-        'in_progress',
-      ],
-
-      in_progress: [
-        'waiting',
-        'resolved',
-      ],
-
-      waiting: [
-        'in_progress',
-      ],
-
-      resolved: [
-        'closed',
-      ],
-
-      closed: [
-        'reopened',
-      ],
-
-      reopened: [
-        'open',
-      ],
-
-      rejected: [
-        'closed',
-      ],
+      new: ['pending_approval', 'canceled'],
+      pending_approval: ['open', 'rejected'],
+      open: ['in_progress'],
+      in_progress: ['waiting', 'resolved'],
+      waiting: ['in_progress'],
+      resolved: ['closed'],
+      closed: ['reopened'],
+      reopened: ['open'],
+      rejected: ['closed'],
     };
 
     return transitions[currentStatus] || [];
   };
 
-  const availableStatuses =
-    getAvailableStatuses(ticket.status);
+  const availableStatuses = getAvailableStatuses(ticket.status);
 
-  /* ────────────────────────────────────────────────────────────────────── */
-  /* Open                                                                  */
-  /* ────────────────────────────────────────────────────────────────────── */
+  // ---------------------------------------------------------------------------
+  // Open
+  // ---------------------------------------------------------------------------
 
-  const handleToggleMenu = (
-    event: React.MouseEvent<HTMLButtonElement>,
-  ) => {
+  const handleToggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
 
     if (open) {
-      setOpen(false);
-      setShowAssigneeMenu(false);
+      closeMenu();
       return;
-    }
-
-    /*
-     * Первичное определение направления.
-     *
-     * После render useEffect выше проверит
-     * уже настоящую высоту меню.
-     */
-    const rect =
-      buttonRef.current?.getBoundingClientRect();
-
-    if (rect) {
-      const spaceBelow =
-        window.innerHeight - rect.bottom;
-
-      const spaceAbove =
-        rect.top;
-
-      /*
-       * Для строки в нижней половине viewport
-       * сразу предпочтём открытие наверх,
-       * если снизу мало места.
-       */
-      setOpenUp(
-        spaceBelow < 420 &&
-        spaceAbove > spaceBelow,
-      );
-    } else {
-      setOpenUp(false);
     }
 
     setShowAssigneeMenu(false);
@@ -834,14 +724,7 @@ function TicketActions({
 
   return (
     <>
-      <div
-        ref={ref}
-        className="relative"
-      >
-        {/* ================================================================ */}
-        {/* Троеточие */}
-        {/* ================================================================ */}
-
+      <div ref={ref} className="relative">
         <button
           ref={buttonRef}
           type="button"
@@ -858,28 +741,23 @@ function TicketActions({
         >
           <MoreVertical size={20} />
         </button>
+      </div>
 
-        {/* ================================================================ */}
-        {/* Меню */}
-        {/* ================================================================ */}
-
-        {open && (
+      {/* MENU (PORTAL) */}
+      {open &&
+        createPortal(
           <div
             ref={menuRef}
-            className={`
-              absolute right-0 z-[500]
-              w-[270px]
-              overflow-hidden
-              rounded-xl
-              border border-[var(--border-color)]
-              bg-[var(--bg-card)]
-              shadow-2xl
-
-              ${openUp
-                ? 'bottom-full mb-2'
-                : 'top-full mt-2'
+            style={
+              menuStyle ?? {
+                position: 'fixed',
+                top: -9999,
+                left: -9999,
+                width: 270,
+                zIndex: 2500,
               }
-            `}
+            }
+            className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -895,12 +773,8 @@ function TicketActions({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-
-                  setOpen(false);
-
-                  navigate(
-                    `/tasks?ticket_id=${ticket.id}`,
-                  );
+                  closeMenu();
+                  navigate(`/tasks?ticket_id=${ticket.id}`);
                 }}
                 className="
                   flex w-full items-center gap-3
@@ -911,14 +785,8 @@ function TicketActions({
                   hover:bg-[var(--hover-1)]
                 "
               >
-                <FolderOpen
-                  size={16}
-                  className="shrink-0 text-[var(--text-primary)]/40"
-                />
-
-                <span>
-                  Посмотреть задачи по заявке
-                </span>
+                <FolderOpen size={16} className="shrink-0 text-[var(--text-primary)]/40" />
+                <span>Посмотреть задачи по заявке</span>
               </button>
 
               <button
@@ -926,12 +794,8 @@ function TicketActions({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-
-                  setOpen(false);
-
-                  navigate(
-                    `/tasks?ticket_id=${ticket.id}&create=1`,
-                  );
+                  closeMenu();
+                  navigate(`/tasks?ticket_id=${ticket.id}&create=1`);
                 }}
                 className="
                   flex w-full items-center gap-3
@@ -942,14 +806,8 @@ function TicketActions({
                   hover:bg-[var(--hover-1)]
                 "
               >
-                <Plus
-                  size={16}
-                  className="shrink-0 text-[var(--accent)]"
-                />
-
-                <span>
-                  Создать задачу на основании
-                </span>
+                <Plus size={16} className="shrink-0 text-[var(--accent)]" />
+                <span>Создать задачу на основании</span>
               </button>
             </div>
 
@@ -965,9 +823,7 @@ function TicketActions({
 
             <div className="px-2 pb-2">
               {availableStatuses.length === 0 ? (
-                <p className="px-2 py-2 text-sm text-[var(--text-primary)]/30">
-                  Нет доступных переходов
-                </p>
+                <p className="px-2 py-2 text-sm text-[var(--text-primary)]/30">Нет доступных переходов</p>
               ) : (
                 availableStatuses.map((status) => (
                   <button
@@ -977,57 +833,33 @@ function TicketActions({
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-
                       handleStatusChange(status);
                     }}
                     className="
-    group/status
-    flex w-full items-center gap-3
-    rounded-lg px-3 py-2.5
-    border border-transparent
-    text-left text-sm
-    text-[var(--text-primary)]/75
-    cursor-pointer
-    transition-all duration-150
-
-    hover:bg-[var(--hover-2)]
-    hover:border-[var(--border-color)]
-    hover:text-[var(--text-primary)]
-
-    focus-visible:outline-none
-    focus-visible:bg-[var(--hover-2)]
-    focus-visible:border-[var(--accent)]/40
-
-    disabled:opacity-50
-    disabled:cursor-not-allowed
-  "
+                      group/status
+                      flex w-full items-center gap-3
+                      rounded-lg px-3 py-2.5
+                      border border-transparent
+                      text-left text-sm
+                      text-[var(--text-primary)]/75
+                      cursor-pointer
+                      transition-all duration-150
+                      hover:bg-[var(--hover-2)]
+                      hover:border-[var(--border-color)]
+                      hover:text-[var(--text-primary)]
+                      disabled:opacity-50
+                      disabled:cursor-not-allowed
+                    "
                   >
-                    <span
-                      className={`
-      w-2 h-2 rounded-full shrink-0
-      ${STATUS_MAP[status]?.color || 'status-closed'}
-    `}
-                    />
-
-                    <span className="flex-1 font-medium">
-                      {STATUS_MAP[status]?.label || status}
-                    </span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_MAP[status]?.color || 'status-closed'}`} />
+                    <span className="flex-1 font-medium">{STATUS_MAP[status]?.label || status}</span>
 
                     {updatingStatus ? (
-                      <Loader2
-                        size={14}
-                        className="animate-spin shrink-0"
-                      />
+                      <Loader2 size={14} className="animate-spin shrink-0" />
                     ) : (
                       <ChevronRight
                         size={14}
-                        className="
-        shrink-0
-        opacity-20
-        transition-all duration-150
-        group-hover/status:opacity-70
-        group-hover/status:translate-x-0.5
-      "
+                        className="shrink-0 opacity-20 transition-all duration-150 group-hover/status:opacity-70 group-hover/status:translate-x-0.5"
                       />
                     )}
                   </button>
@@ -1046,10 +878,7 @@ function TicketActions({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-
-                setShowAssigneeMenu(
-                  (value) => !value,
-                );
+                setShowAssigneeMenu((v) => !v);
               }}
               className="
                 flex w-full items-center
@@ -1062,14 +891,8 @@ function TicketActions({
               "
             >
               <span className="flex min-w-0 items-center gap-3">
-                <UserCheck
-                  size={16}
-                  className="shrink-0 text-[var(--text-primary)]/40"
-                />
-
-                <span>
-                  Исполнитель
-                </span>
+                <UserCheck size={16} className="shrink-0 text-[var(--text-primary)]/40" />
+                <span>Исполнитель</span>
               </span>
 
               <ChevronDown
@@ -1078,32 +901,16 @@ function TicketActions({
                   shrink-0
                   text-[var(--text-primary)]/40
                   transition-transform
-
-                  ${showAssigneeMenu
-                    ? 'rotate-180'
-                    : ''
-                  }
+                  ${showAssigneeMenu ? 'rotate-180' : ''}
                 `}
               />
             </button>
 
             {showAssigneeMenu && (
-              <div
-                className="
-                  max-h-[170px]
-                  overflow-y-auto
-                  overscroll-contain
-                  border-t border-[var(--border-color)]
-                  bg-[var(--hover-1)]/50
-                  py-1
-                "
-              >
+              <div className="max-h-[170px] overflow-y-auto overscroll-contain border-t border-[var(--border-color)] bg-[var(--hover-1)]/50 py-1">
                 {loadingUsers ? (
                   <div className="flex justify-center py-3">
-                    <Loader2
-                      size={16}
-                      className="animate-spin text-[var(--text-primary)]/40"
-                    />
+                    <Loader2 size={16} className="animate-spin text-[var(--text-primary)]/40" />
                   </div>
                 ) : (
                   <>
@@ -1113,7 +920,6 @@ function TicketActions({
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-
                         handleAssigneeChange(null);
                       }}
                       className="
@@ -1126,14 +932,8 @@ function TicketActions({
                         disabled:opacity-50
                       "
                     >
-                      <X
-                        size={14}
-                        className="shrink-0 text-[var(--text-primary)]/40"
-                      />
-
-                      <span>
-                        Снять исполнителя
-                      </span>
+                      <X size={14} className="shrink-0 text-[var(--text-primary)]/40" />
+                      <span>Снять исполнителя</span>
                     </button>
 
                     {supportUsers.map((staffUser) => (
@@ -1144,7 +944,6 @@ function TicketActions({
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-
                           handleAssigneeChange(staffUser.id);
                         }}
                         className="
@@ -1157,22 +956,13 @@ function TicketActions({
                           disabled:opacity-50
                         "
                       >
-                        <User
-                          size={14}
-                          className="shrink-0 text-[var(--text-primary)]/40"
-                        />
-
+                        <User size={14} className="shrink-0 text-[var(--text-primary)]/40" />
                         <span className="min-w-0 flex-1 truncate">
-                          {staffUser.full_name ||
-                            staffUser.username ||
-                            staffUser.email}
+                          {staffUser.full_name || staffUser.username || staffUser.email}
                         </span>
 
                         {ticket.assignee?.id === staffUser.id && (
-                          <Check
-                            size={14}
-                            className="ml-auto shrink-0 text-[var(--success)]"
-                          />
+                          <Check size={14} className="ml-auto shrink-0 text-[var(--success)]" />
                         )}
                       </button>
                     ))}
@@ -1193,8 +983,7 @@ function TicketActions({
                 event.preventDefault();
                 event.stopPropagation();
 
-                setOpen(false);
-                setShowAssigneeMenu(false);
+                closeMenu();
                 setShowArchiveConfirm(true);
               }}
               className="
@@ -1206,49 +995,30 @@ function TicketActions({
                 hover:bg-[var(--hover-1)]
               "
             >
-              <Archive
-                size={16}
-                className="shrink-0 text-[var(--text-primary)]/40"
-              />
-
-              <span>
-                В архив
-              </span>
+              <Archive size={16} className="shrink-0 text-[var(--text-primary)]/40" />
+              <span>В архив</span>
             </button>
-          </div>
+          </div>,
+          document.body,
         )}
-      </div>
 
       {/* ================================================================== */}
-      {/* Подтверждение архива */}
+      {/* Подтверждение архива (как у тебя, fixed и так поверх всего) */}
       {/* ================================================================== */}
 
       {showArchiveConfirm && (
         <div
-          className="
-            fixed inset-0 z-[1000]
-            flex items-center justify-center
-            p-4
-          "
+          className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-
-            if (!archiving) {
-              setShowArchiveConfirm(false);
-            }
+            if (!archiving) setShowArchiveConfirm(false);
           }}
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
           <div
-            className="
-              relative w-full max-w-sm
-              overflow-hidden rounded-2xl
-              border border-[var(--border-color)]
-              bg-[var(--bg-card)]
-              shadow-2xl
-            "
+            className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1259,15 +1029,11 @@ function TicketActions({
                 <Archive className="h-6 w-6 text-amber-500" />
               </div>
 
-              <h3 className="mb-2 text-lg font-bold text-[var(--text-primary)]">
-                Переместить в архив?
-              </h3>
+              <h3 className="mb-2 text-lg font-bold text-[var(--text-primary)]">Переместить в архив?</h3>
 
               <p className="text-sm text-[var(--text-primary)]/50">
                 Заявка{' '}
-                <span className="font-mono text-[var(--accent)]">
-                  {ticket.number}
-                </span>{' '}
+                <span className="font-mono text-[var(--accent)]">{ticket.number}</span>{' '}
                 будет скрыта из основного списка
               </p>
             </div>
@@ -1279,17 +1045,9 @@ function TicketActions({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-
                   setShowArchiveConfirm(false);
                 }}
-                className="
-                  flex-1 py-3.5
-                  text-sm font-medium
-                  text-[var(--text-primary)]/60
-                  transition-colors
-                  hover:bg-[var(--hover-1)]
-                  disabled:opacity-50
-                "
+                className="flex-1 py-3.5 text-sm font-medium text-[var(--text-primary)]/60 transition-colors hover:bg-[var(--hover-1)] disabled:opacity-50"
               >
                 Отмена
               </button>
@@ -1300,30 +1058,11 @@ function TicketActions({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-
                   handleArchive();
                 }}
-                className="
-                  flex flex-1 items-center
-                  justify-center gap-2
-                  border-l border-[var(--border-color)]
-                  py-3.5
-                  text-sm font-semibold
-                  text-amber-500
-                  transition-colors
-                  hover:bg-amber-500/10
-                  disabled:opacity-50
-                "
+                className="flex flex-1 items-center justify-center gap-2 border-l border-[var(--border-color)] py-3.5 text-sm font-semibold text-amber-500 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
               >
-                {archiving ? (
-                  <Loader2
-                    size={16}
-                    className="animate-spin"
-                  />
-                ) : (
-                  <Archive size={16} />
-                )}
-
+                {archiving ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />}
                 В архив
               </button>
             </div>
@@ -1546,7 +1285,7 @@ function TicketKanbanCard({
               {priorityLabel}
             </span>
 
-            
+
           </div>
         </div>
 
@@ -1636,7 +1375,7 @@ function TicketsKanbanColumns({
             </div>
 
             {/* body: как в задачах, но scrollbar скрыт */}
-              <div className="p-2.5 flex-1 space-y-2.5 overflow-visible">
+            <div className="p-2.5 flex-1 space-y-2.5 overflow-visible">
               {items.length === 0 ? (
                 <div className="h-24 flex flex-col items-center justify-center text-[var(--text-primary)]/30 border border-dashed border-[var(--border-color)] rounded-xl">
                   <FileText className="w-5 h-5 mb-1 opacity-50" />
@@ -1683,11 +1422,11 @@ export default function TicketsPage() {
   );
 
   const [stats, setStats] = useState({
-  total: 0,
-  new: 0,
-  in_progress: 0,
-  critical: 0,
-});
+    total: 0,
+    new: 0,
+    in_progress: 0,
+    critical: 0,
+  });
 
 
 
@@ -1705,171 +1444,171 @@ export default function TicketsPage() {
   const showReporterCol = !isCustomer;
 
   const boardScrollRef = useRef<HTMLDivElement>(null);
-const boardInnerRef = useRef<HTMLDivElement>(null);
+  const boardInnerRef = useRef<HTMLDivElement>(null);
 
 
-const bottomTrackRef = useRef<HTMLDivElement>(null);
+  const bottomTrackRef = useRef<HTMLDivElement>(null);
 
-const scrollbarThumbPercentRef = useRef(20);
-const scrollRafRef = useRef<number | null>(null);
+  const scrollbarThumbPercentRef = useRef(20);
+  const scrollRafRef = useRef<number | null>(null);
 
-const [boardScrollWidth, setBoardScrollWidth] = useState(0);
-const [boardViewportWidth, setBoardViewportWidth] = useState(0);
+  const [boardScrollWidth, setBoardScrollWidth] = useState(0);
+  const [boardViewportWidth, setBoardViewportWidth] = useState(0);
 
-const scrollbarDragRef = useRef<{
-  startX: number;
-  startScrollLeft: number;
-} | null>(null);
+  const scrollbarDragRef = useRef<{
+    startX: number;
+    startScrollLeft: number;
+  } | null>(null);
 
-const [fixedBoardScrollbarStyle, setFixedBoardScrollbarStyle] = useState<React.CSSProperties>({
-  position: 'fixed',
-  left: 0,
-  width: 0,
-  bottom: 12,
-  zIndex: 55,
-  display: 'none',
-});
-
-const updateThumbPosition = useCallback(() => {
-  const board = boardScrollRef.current;
-  const track = bottomTrackRef.current;
-  const thumb = track?.querySelector<HTMLElement>('[data-scroll-thumb="true"]');
-
-  if (!board || !track || !thumb) return;
-
-  const boardMax = board.scrollWidth - board.clientWidth;
-  if (boardMax <= 0) {
-    thumb.style.transform = 'translateX(0px)';
-    return;
-  }
-
-  const progress = Math.min(Math.max(board.scrollLeft / boardMax, 0), 1);
-  const trackWidth = track.clientWidth;
-  const thumbWidth = thumb.offsetWidth;
-  const maxTravel = Math.max(trackWidth - thumbWidth, 0);
-
-  thumb.style.transform = `translateX(${progress * maxTravel}px)`;
-}, []);
-
-const handleBoardScroll = useCallback(() => {
-  if (scrollRafRef.current !== null) return;
-  scrollRafRef.current = requestAnimationFrame(() => {
-    scrollRafRef.current = null;
-    updateThumbPosition();
+  const [fixedBoardScrollbarStyle, setFixedBoardScrollbarStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    left: 0,
+    width: 0,
+    bottom: 12,
+    zIndex: 55,
+    display: 'none',
   });
-}, [updateThumbPosition]);
 
-const syncBoardScrollbarMetrics = useCallback(() => {
-  const board = boardScrollRef.current;
-  const inner = boardInnerRef.current;
-  const track = bottomTrackRef.current;
-  const thumb = track?.querySelector<HTMLElement>('[data-scroll-thumb="true"]');
+  const updateThumbPosition = useCallback(() => {
+    const board = boardScrollRef.current;
+    const track = bottomTrackRef.current;
+    const thumb = track?.querySelector<HTMLElement>('[data-scroll-thumb="true"]');
 
-  if (!board || !inner) {
-    setFixedBoardScrollbarStyle((prev) =>
-      prev.display === 'none' ? prev : { ...prev, display: 'none' }
-    );
-    return;
-  }
+    if (!board || !track || !thumb) return;
 
-  const contentWidth = inner.scrollWidth;
-  const viewportWidth = board.clientWidth;
-  const rect = board.getBoundingClientRect();
+    const boardMax = board.scrollWidth - board.clientWidth;
+    if (boardMax <= 0) {
+      thumb.style.transform = 'translateX(0px)';
+      return;
+    }
 
-  const hasHorizontalOverflow = contentWidth > viewportWidth + 2;
+    const progress = Math.min(Math.max(board.scrollLeft / boardMax, 0), 1);
+    const trackWidth = track.clientWidth;
+    const thumbWidth = thumb.offsetWidth;
+    const maxTravel = Math.max(trackWidth - thumbWidth, 0);
 
-  const thumbPercent = Math.min(Math.max((viewportWidth / contentWidth) * 100, 8), 100);
-  scrollbarThumbPercentRef.current = thumbPercent;
+    thumb.style.transform = `translateX(${progress * maxTravel}px)`;
+  }, []);
 
-  if (thumb) {
-    thumb.style.width = `${thumbPercent}%`;
-  }
+  const handleBoardScroll = useCallback(() => {
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      updateThumbPosition();
+    });
+  }, [updateThumbPosition]);
 
-  setBoardScrollWidth((prev) => (prev === contentWidth ? prev : contentWidth));
-  setBoardViewportWidth((prev) => (prev === viewportWidth ? prev : viewportWidth));
+  const syncBoardScrollbarMetrics = useCallback(() => {
+    const board = boardScrollRef.current;
+    const inner = boardInnerRef.current;
+    const track = bottomTrackRef.current;
+    const thumb = track?.querySelector<HTMLElement>('[data-scroll-thumb="true"]');
 
-  setFixedBoardScrollbarStyle((prev) => {
-    const newStyle: React.CSSProperties = {
-      position: 'fixed',
-      left: rect.left,
-      width: rect.width,
-      bottom: 12,
-      zIndex: 55,
-      display: hasHorizontalOverflow ? 'block' : 'none',
-      pointerEvents: 'auto',
+    if (!board || !inner) {
+      setFixedBoardScrollbarStyle((prev) =>
+        prev.display === 'none' ? prev : { ...prev, display: 'none' }
+      );
+      return;
+    }
+
+    const contentWidth = inner.scrollWidth;
+    const viewportWidth = board.clientWidth;
+    const rect = board.getBoundingClientRect();
+
+    const hasHorizontalOverflow = contentWidth > viewportWidth + 2;
+
+    const thumbPercent = Math.min(Math.max((viewportWidth / contentWidth) * 100, 8), 100);
+    scrollbarThumbPercentRef.current = thumbPercent;
+
+    if (thumb) {
+      thumb.style.width = `${thumbPercent}%`;
+    }
+
+    setBoardScrollWidth((prev) => (prev === contentWidth ? prev : contentWidth));
+    setBoardViewportWidth((prev) => (prev === viewportWidth ? prev : viewportWidth));
+
+    setFixedBoardScrollbarStyle((prev) => {
+      const newStyle: React.CSSProperties = {
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        bottom: 12,
+        zIndex: 55,
+        display: hasHorizontalOverflow ? 'block' : 'none',
+        pointerEvents: 'auto',
+      };
+
+      if (
+        prev.display === newStyle.display &&
+        prev.left === newStyle.left &&
+        prev.width === newStyle.width &&
+        prev.bottom === newStyle.bottom
+      ) {
+        return prev;
+      }
+      return newStyle;
+    });
+
+    updateThumbPosition();
+  }, [updateThumbPosition]);
+
+
+
+  const handleScrollbarPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const board = boardScrollRef.current;
+    if (!board) return;
+
+    e.preventDefault();
+    scrollbarDragRef.current = {
+      startX: e.clientX,
+      startScrollLeft: board.scrollLeft,
     };
 
-    if (
-      prev.display === newStyle.display &&
-      prev.left === newStyle.left &&
-      prev.width === newStyle.width &&
-      prev.bottom === newStyle.bottom
-    ) {
-      return prev;
-    }
-    return newStyle;
-  });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
 
-  updateThumbPosition();
-}, [updateThumbPosition]);
+  const handleScrollbarPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = scrollbarDragRef.current;
+    const board = boardScrollRef.current;
+    const track = bottomTrackRef.current;
 
+    if (!dragState || !board || !track) return;
 
+    const trackWidth = track.clientWidth;
+    const thumbPercent = scrollbarThumbPercentRef.current;
+    const thumbWidth = trackWidth * (thumbPercent / 100);
+    const thumbTravel = Math.max(trackWidth - thumbWidth, 1);
+    const boardMax = Math.max(board.scrollWidth - board.clientWidth, 0);
 
-const handleScrollbarPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-  const board = boardScrollRef.current;
-  if (!board) return;
+    const deltaX = e.clientX - dragState.startX;
+    const scrollDelta = (deltaX / thumbTravel) * boardMax;
 
-  e.preventDefault();
-  scrollbarDragRef.current = {
-    startX: e.clientX,
-    startScrollLeft: board.scrollLeft,
-  };
+    board.scrollLeft = dragState.startScrollLeft + scrollDelta;
+  }, []);
 
-  e.currentTarget.setPointerCapture(e.pointerId);
-}, []);
+  const handleScrollbarPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    scrollbarDragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch { }
+  }, []);
 
-const handleScrollbarPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-  const dragState = scrollbarDragRef.current;
-  const board = boardScrollRef.current;
-  const track = bottomTrackRef.current;
+  const handleScrollbarTrackClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const board = boardScrollRef.current;
+    const track = bottomTrackRef.current;
 
-  if (!dragState || !board || !track) return;
+    if (!board || !track) return;
+    if ((e.target as HTMLElement).dataset.scrollThumb === 'true') return;
 
-  const trackWidth = track.clientWidth;
-  const thumbPercent = scrollbarThumbPercentRef.current;
-  const thumbWidth = trackWidth * (thumbPercent / 100);
-  const thumbTravel = Math.max(trackWidth - thumbWidth, 1);
-  const boardMax = Math.max(board.scrollWidth - board.clientWidth, 0);
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+    const maxScroll = board.scrollWidth - board.clientWidth;
 
-  const deltaX = e.clientX - dragState.startX;
-  const scrollDelta = (deltaX / thumbTravel) * boardMax;
-
-  board.scrollLeft = dragState.startScrollLeft + scrollDelta;
-}, []);
-
-const handleScrollbarPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-  scrollbarDragRef.current = null;
-  try {
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  } catch {}
-}, []);
-
-const handleScrollbarTrackClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-  const board = boardScrollRef.current;
-  const track = bottomTrackRef.current;
-
-  if (!board || !track) return;
-  if ((e.target as HTMLElement).dataset.scrollThumb === 'true') return;
-
-  const rect = track.getBoundingClientRect();
-  const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
-  const maxScroll = board.scrollWidth - board.clientWidth;
-
-  board.scrollTo({
-    left: ratio * maxScroll,
-    behavior: 'smooth',
-  });
-}, []);
+    board.scrollTo({
+      left: ratio * maxScroll,
+      behavior: 'smooth',
+    });
+  }, []);
   /* ── State ── */
   const initialSearch = searchParams.get('search') || '';
   const initialStatus = getMultiParam('status');
@@ -1905,25 +1644,25 @@ const handleScrollbarTrackClick = useCallback((e: React.MouseEvent<HTMLDivElemen
 
   const [viewMode, setViewMode] = useState<TicketsViewMode>('list');
   // --- Kanban data (догрузка) ---
-const [boardTickets, setBoardTickets] = useState<TicketListItem[]>([]);
-const [boardPage, setBoardPage] = useState(1);
-const [boardTotalPages, setBoardTotalPages] = useState(1);
-const [boardLoadingMore, setBoardLoadingMore] = useState(false);
+  const [boardTickets, setBoardTickets] = useState<TicketListItem[]>([]);
+  const [boardPage, setBoardPage] = useState(1);
+  const [boardTotalPages, setBoardTotalPages] = useState(1);
+  const [boardLoadingMore, setBoardLoadingMore] = useState(false);
 
-const boardHasMore = boardPage < boardTotalPages;
+  const boardHasMore = boardPage < boardTotalPages;
 
-// Что показываем в UI
-const shownTickets = viewMode === 'board' ? boardTickets : tickets;
-  
+  // Что показываем в UI
+  const shownTickets = viewMode === 'board' ? boardTickets : tickets;
 
-useEffect(() => {
-  const saved = localStorage.getItem('tickets-view-mode') as TicketsViewMode | null;
-  if (saved === 'list' || saved === 'board') setViewMode(saved);
-}, []);
 
-useEffect(() => {
-  localStorage.setItem('tickets-view-mode', viewMode);
-}, [viewMode]);
+  useEffect(() => {
+    const saved = localStorage.getItem('tickets-view-mode') as TicketsViewMode | null;
+    if (saved === 'list' || saved === 'board') setViewMode(saved);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('tickets-view-mode', viewMode);
+  }, [viewMode]);
 
 
   // 1. Читать page из URL
@@ -1980,7 +1719,7 @@ useEffect(() => {
     }
   }, [loading, initialLoad, page]);
 
-  
+
 
   /* ── Debounce поиска ── */
   useEffect(() => {
@@ -1999,20 +1738,20 @@ useEffect(() => {
   }, [isClientUser]);
 
 
-useEffect(() => {
-  const spSearch = searchParams.get('search') || '';
-  const spStatus = getMultiParam('status');
-  const spPriority = searchParams.get('priority') || '';
-  const spPage = parseInt(searchParams.get('page') || '1', 10) || 1;
+  useEffect(() => {
+    const spSearch = searchParams.get('search') || '';
+    const spStatus = getMultiParam('status');
+    const spPriority = searchParams.get('priority') || '';
+    const spPage = parseInt(searchParams.get('page') || '1', 10) || 1;
 
-  setSearch(spSearch);
-  setDebouncedSearch(spSearch);
+    setSearch(spSearch);
+    setDebouncedSearch(spSearch);
 
-  setStatusFilter(spStatus);
-  setPriorityFilter(spPriority);
+    setStatusFilter(spStatus);
+    setPriorityFilter(spPriority);
 
-  setPage(spPage); // ✅ вместо setPage(1)
-}, [searchParams, getMultiParam]);
+    setPage(spPage); // ✅ вместо setPage(1)
+  }, [searchParams, getMultiParam]);
 
   /* ── Загрузка справочников при открытии фильтров ── */
   useEffect(() => {
@@ -2061,86 +1800,86 @@ useEffect(() => {
 
   // 5. В loadTickets — не сбрасывать page
   const loadTickets = useCallback(async (targetPage?: number) => {
-  setLoading(true);
-  const p = targetPage ?? page;
+    setLoading(true);
+    const p = targetPage ?? page;
 
-  try {
-    const response = await ticketsApi.getAll(p, 9, buildFilters());
-    setTickets(response.items);
-    setTotalPages(response.total_pages);
-    setTotalItems(response.total_items);
-  } catch (e) {
-    console.error('loadTickets error:', e);
-  } finally {
-    setLoading(false);
-    setInitialLoad(false);
-  }
-}, [buildFilters, page]);
+    try {
+      const response = await ticketsApi.getAll(p, 9, buildFilters());
+      setTickets(response.items);
+      setTotalPages(response.total_pages);
+      setTotalItems(response.total_items);
+    } catch (e) {
+      console.error('loadTickets error:', e);
+    } finally {
+      setLoading(false);
+      setInitialLoad(false);
+    }
+  }, [buildFilters, page]);
 
-useEffect(() => {
-  if (viewMode === 'list') {
-    loadTickets();
-  }
-}, [viewMode, loadTickets]);
+  useEffect(() => {
+    if (viewMode === 'list') {
+      loadTickets();
+    }
+  }, [viewMode, loadTickets]);
 
-const reloadBoard = useCallback(async () => {
-  setLoading(true);
+  const reloadBoard = useCallback(async () => {
+    setLoading(true);
 
-  try {
-    const res = await ticketsApi.getAll(1, 50, buildFilters());
+    try {
+      const res = await ticketsApi.getAll(1, 50, buildFilters());
 
-    setBoardTickets(res.items);
-    setBoardPage(1);
-    setBoardTotalPages(res.total_pages);
+      setBoardTickets(res.items);
+      setBoardPage(1);
+      setBoardTotalPages(res.total_pages);
 
-    // чтобы счетчик "всего" в хедере был правильный
-    setTotalItems(res.total_items);
-  } catch (e) {
-    console.error('reloadBoard error:', e);
-    setBoardTickets([]);
-    setBoardPage(1);
-    setBoardTotalPages(1);
-  } finally {
-    setLoading(false);
-    setInitialLoad(false);
-  }
-}, [buildFilters]);
+      // чтобы счетчик "всего" в хедере был правильный
+      setTotalItems(res.total_items);
+    } catch (e) {
+      console.error('reloadBoard error:', e);
+      setBoardTickets([]);
+      setBoardPage(1);
+      setBoardTotalPages(1);
+    } finally {
+      setLoading(false);
+      setInitialLoad(false);
+    }
+  }, [buildFilters]);
 
-const loadMoreBoard = useCallback(async () => {
-  if (boardLoadingMore) return;
-  if (boardPage >= boardTotalPages) return;
+  const loadMoreBoard = useCallback(async () => {
+    if (boardLoadingMore) return;
+    if (boardPage >= boardTotalPages) return;
 
-  const nextPage = boardPage + 1;
-  setBoardLoadingMore(true);
+    const nextPage = boardPage + 1;
+    setBoardLoadingMore(true);
 
-  try {
-    const res = await ticketsApi.getAll(nextPage, 50, buildFilters());
+    try {
+      const res = await ticketsApi.getAll(nextPage, 50, buildFilters());
 
-    setBoardTickets((prev) => {
-      const m = new Map(prev.map((t) => [t.id, t]));
-      for (const t of res.items) m.set(t.id, t);
-      return Array.from(m.values());
-    });
+      setBoardTickets((prev) => {
+        const m = new Map(prev.map((t) => [t.id, t]));
+        for (const t of res.items) m.set(t.id, t);
+        return Array.from(m.values());
+      });
 
-    setBoardPage(nextPage);
-    setBoardTotalPages(res.total_pages);
-  } catch (e) {
-    console.error('loadMoreBoard error:', e);
-  } finally {
-    setBoardLoadingMore(false);
-  }
-}, [boardLoadingMore, boardPage, boardTotalPages, buildFilters]);
+      setBoardPage(nextPage);
+      setBoardTotalPages(res.total_pages);
+    } catch (e) {
+      console.error('loadMoreBoard error:', e);
+    } finally {
+      setBoardLoadingMore(false);
+    }
+  }, [boardLoadingMore, boardPage, boardTotalPages, buildFilters]);
 
-useEffect(() => {
-  if (viewMode === 'board') {
-    reloadBoard();
-  }
-}, [viewMode, reloadBoard]);
+  useEffect(() => {
+    if (viewMode === 'board') {
+      reloadBoard();
+    }
+  }, [viewMode, reloadBoard]);
 
   /* ── Пагинация ── */
-const handlePageChange = (pageNum: number) => {
-  setPage(pageNum); // загрузка пойдёт через useEffect(() => loadTickets(), [loadTickets])
-};
+  const handlePageChange = (pageNum: number) => {
+    setPage(pageNum); // загрузка пойдёт через useEffect(() => loadTickets(), [loadTickets])
+  };
 
   /* ── Сброс фильтров ── */
   const resetFilters = () => {
@@ -2160,70 +1899,70 @@ const handlePageChange = (pageNum: number) => {
 
 
   const loadStats = useCallback(async () => {
-  try {
-    // Заявки БЕЗ фильтров — общая статистика
-    const allRes = await ticketsApi.getAll(1, 1, {});
-    const total = allRes.total_items;
+    try {
+      // Заявки БЕЗ фильтров — общая статистика
+      const allRes = await ticketsApi.getAll(1, 1, {});
+      const total = allRes.total_items;
 
-    // Новые
-    const newRes = await ticketsApi.getAll(1, 1, { status: ['new'] });
-    const newCount = newRes.total_items;
+      // Новые
+      const newRes = await ticketsApi.getAll(1, 1, { status: ['new'] });
+      const newCount = newRes.total_items;
 
-    // В работе
-    const progressRes = await ticketsApi.getAll(1, 1, { status: ['in_progress', 'open'] });
-    const progressCount = progressRes.total_items;
+      // В работе
+      const progressRes = await ticketsApi.getAll(1, 1, { status: ['in_progress', 'open'] });
+      const progressCount = progressRes.total_items;
 
-    // Критические
-    const criticalRes = await ticketsApi.getAll(1, 1, { priority: 'critical' });
-    const criticalCount = criticalRes.total_items;
+      // Критические
+      const criticalRes = await ticketsApi.getAll(1, 1, { priority: 'critical' });
+      const criticalCount = criticalRes.total_items;
 
-    setStats({
-      total,
-      new: newCount,
-      in_progress: progressCount,
-      critical: criticalCount,
-    });
-  } catch (e) {
-    console.error('loadStats error:', e);
-  }
-}, []);
+      setStats({
+        total,
+        new: newCount,
+        in_progress: progressCount,
+        critical: criticalCount,
+      });
+    } catch (e) {
+      console.error('loadStats error:', e);
+    }
+  }, []);
 
-useEffect(() => {
-  loadStats();
-}, [loadStats]);
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
 
-useEffect(() => {
-  if (viewMode !== 'board' || loading || !boardTickets.length) {
-    setFixedBoardScrollbarStyle((prev) => ({ ...prev, display: 'none' }));
-    return;
-  }
+  useEffect(() => {
+    if (viewMode !== 'board' || loading || !boardTickets.length) {
+      setFixedBoardScrollbarStyle((prev) => ({ ...prev, display: 'none' }));
+      return;
+    }
 
-  const run = () => {
-    requestAnimationFrame(syncBoardScrollbarMetrics);
-  };
+    const run = () => {
+      requestAnimationFrame(syncBoardScrollbarMetrics);
+    };
 
-  run();
+    run();
 
-  const board = boardScrollRef.current;
-  const inner = boardInnerRef.current;
+    const board = boardScrollRef.current;
+    const inner = boardInnerRef.current;
 
-  let ro: ResizeObserver | null = null;
-  if (typeof ResizeObserver !== 'undefined' && board && inner) {
-    ro = new ResizeObserver(run);
-    ro.observe(board);
-    ro.observe(inner);
-  }
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && board && inner) {
+      ro = new ResizeObserver(run);
+      ro.observe(board);
+      ro.observe(inner);
+    }
 
-  window.addEventListener('resize', run);
-  window.addEventListener('scroll', run);
+    window.addEventListener('resize', run);
+    window.addEventListener('scroll', run);
 
-  return () => {
-    ro?.disconnect();
-    window.removeEventListener('resize', run);
-    window.removeEventListener('scroll', run);
-  };
-}, [viewMode, loading, boardTickets.length, syncBoardScrollbarMetrics]);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', run);
+      window.removeEventListener('scroll', run);
+    };
+  }, [viewMode, loading, boardTickets.length, syncBoardScrollbarMetrics]);
 
   /* ── Счётчики ── */
   const hasFilters = !!(
@@ -2267,29 +2006,29 @@ useEffect(() => {
     sublabel: p.key,
   }));
 
-const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
-  setPage(1);
-  setProjectFilter([]);
-  setTypeFilter('');
-  setCounterpartyFilter('');
-  setAssigneeFilter('');
-  setReporterFilter('');
-  setDateFrom('');
-  setDateTo('');
-  setSearch('');
-  setDebouncedSearch('');
+  const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
+    setPage(1);
+    setProjectFilter([]);
+    setTypeFilter('');
+    setCounterpartyFilter('');
+    setAssigneeFilter('');
+    setReporterFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setSearch('');
+    setDebouncedSearch('');
 
-  if (type === 'new') {
-    setStatusFilter(['new']);
-    setPriorityFilter('');
-  } else if (type === 'in_progress') {
-    setStatusFilter(['in_progress', 'open']);
-    setPriorityFilter('');
-  } else if (type === 'critical') {
-    setPriorityFilter('critical');
-    setStatusFilter([]);
-  }
-};
+    if (type === 'new') {
+      setStatusFilter(['new']);
+      setPriorityFilter('');
+    } else if (type === 'in_progress') {
+      setStatusFilter(['in_progress', 'open']);
+      setPriorityFilter('');
+    } else if (type === 'critical') {
+      setPriorityFilter('critical');
+      setStatusFilter([]);
+    }
+  };
 
   const userOptions: DropdownOption[] = users.map(u => ({
     value: u.id,
@@ -2306,7 +2045,7 @@ const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
     );
   }
 
-  
+
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -2335,39 +2074,39 @@ const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-<StatCard 
-  label="Всего" 
-  value={stats.total}
-  icon={Ticket} 
-  color="text-[var(--text-secondary)]" 
-  bg="bg-[var(--hover-1)]"
-  onClick={resetFilters}
-/>
-<StatCard 
-  label="Новых" 
-  value={stats.new}
-  icon={Clock} 
-  color="text-[var(--status-new-text)]" 
-  bg="bg-[var(--status-new-bg)]"
-  onClick={() => handleStatClick('new')}
-/>
-<StatCard 
-  label="В работе" 
-  value={stats.in_progress}
-  icon={CheckCircle2} 
-  color="text-[var(--status-progress-text)]" 
-  bg="bg-[var(--status-progress-bg)]"
-  onClick={() => handleStatClick('in_progress')}
-/>
-<StatCard 
-  label="Критических" 
-  value={stats.critical}
-  icon={AlertTriangle} 
-  color="text-[var(--priority-critical-text)]" 
-  bg="bg-[var(--priority-critical-bg)]"
-  onClick={() => handleStatClick('critical')}
-/>
-</div>
+        <StatCard
+          label="Всего"
+          value={stats.total}
+          icon={Ticket}
+          color="text-[var(--text-secondary)]"
+          bg="bg-[var(--hover-1)]"
+          onClick={resetFilters}
+        />
+        <StatCard
+          label="Новых"
+          value={stats.new}
+          icon={Clock}
+          color="text-[var(--status-new-text)]"
+          bg="bg-[var(--status-new-bg)]"
+          onClick={() => handleStatClick('new')}
+        />
+        <StatCard
+          label="В работе"
+          value={stats.in_progress}
+          icon={CheckCircle2}
+          color="text-[var(--status-progress-text)]"
+          bg="bg-[var(--status-progress-bg)]"
+          onClick={() => handleStatClick('in_progress')}
+        />
+        <StatCard
+          label="Критических"
+          value={stats.critical}
+          icon={AlertTriangle}
+          color="text-[var(--priority-critical-text)]"
+          bg="bg-[var(--priority-critical-bg)]"
+          onClick={() => handleStatClick('critical')}
+        />
+      </div>
 
       {/* ── Search + Filters toggle ── */}
       <div className="flex flex-wrap items-center gap-2.5">
@@ -2418,30 +2157,30 @@ const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
         </button>
 
         <div className="flex items-center gap-2">
-  <button
-    onClick={() => setViewMode('list')}
-    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-base transition-all whitespace-nowrap
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-base transition-all whitespace-nowrap
       ${viewMode === 'list'
-        ? 'bg-[var(--accent)]/10 border-[var(--accent)]/40 text-[var(--text-primary)]'
-        : 'bg-[var(--hover-1)] border-[var(--border-color)] text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/70'
-      }`}
-  >
-    <List size={18} className={viewMode === 'list' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]/40'} />
-    Список
-  </button>
+                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/40 text-[var(--text-primary)]'
+                : 'bg-[var(--hover-1)] border-[var(--border-color)] text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/70'
+              }`}
+          >
+            <List size={18} className={viewMode === 'list' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]/40'} />
+            Список
+          </button>
 
-  <button
-    onClick={() => { setPage(1); setViewMode('board'); }}
-    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-base transition-all whitespace-nowrap
+          <button
+            onClick={() => { setPage(1); setViewMode('board'); }}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-base transition-all whitespace-nowrap
       ${viewMode === 'board'
-        ? 'bg-[var(--accent)]/10 border-[var(--accent)]/40 text-[var(--text-primary)]'
-        : 'bg-[var(--hover-1)] border-[var(--border-color)] text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/70'
-      }`}
-  >
-    <LayoutGrid size={18} className={viewMode === 'board' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]/40'} />
-    Доска
-  </button>
-</div>
+                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/40 text-[var(--text-primary)]'
+                : 'bg-[var(--hover-1)] border-[var(--border-color)] text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/70'
+              }`}
+          >
+            <LayoutGrid size={18} className={viewMode === 'board' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]/40'} />
+            Доска
+          </button>
+        </div>
       </div>
 
       {/* ── Filters Panel ── */}
@@ -2642,150 +2381,150 @@ const handleStatClick = (type: 'new' | 'in_progress' | 'critical') => {
         </div>
       )}
 
-{/* ── Content ── */}
-{shownTickets.length === 0 && !loading ? (
-  <EmptyState
-    hasFilters={hasFilters}
-    hasSearch={!!debouncedSearch}
-    onCreateClick={() => navigate('/tickets/new')}
-  />
-) : shownTickets.length > 0 ? (
-  viewMode === 'board' ? (
-  <>
-    <div className="flex flex-col pb-6">
-      <div
-        ref={boardScrollRef}
-        onScroll={handleBoardScroll}
-        className="overflow-x-auto overflow-y-visible pb-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <div ref={boardInnerRef} className="flex gap-3 w-max min-w-full">
-          <TicketsKanbanColumns
-            tickets={shownTickets}
-            onTicketUpdated={reloadBoard}
-          />
-        </div>
-      </div>
+      {/* ── Content ── */}
+      {shownTickets.length === 0 && !loading ? (
+        <EmptyState
+          hasFilters={hasFilters}
+          hasSearch={!!debouncedSearch}
+          onCreateClick={() => navigate('/tickets/new')}
+        />
+      ) : shownTickets.length > 0 ? (
+        viewMode === 'board' ? (
+          <>
+            <div className="flex flex-col pb-6">
+              <div
+                ref={boardScrollRef}
+                onScroll={handleBoardScroll}
+                className="overflow-x-auto overflow-y-visible pb-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                <div ref={boardInnerRef} className="flex gap-3 w-max min-w-full">
+                  <TicketsKanbanColumns
+                    tickets={shownTickets}
+                    onTicketUpdated={reloadBoard}
+                  />
+                </div>
+              </div>
 
-      {boardHasMore && (
-        <div className="flex justify-center pt-3 shrink-0">
-          <button
-            type="button"
-            onClick={loadMoreBoard}
-            disabled={boardLoadingMore}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card border border-[var(--border-color)]
+              {boardHasMore && (
+                <div className="flex justify-center pt-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={loadMoreBoard}
+                    disabled={boardLoadingMore}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card border border-[var(--border-color)]
                        text-[var(--text-primary)]/70 hover:bg-[var(--hover-2)] disabled:opacity-40"
-          >
-            {boardLoadingMore && <Loader2 size={18} className="animate-spin" />}
-            Показать ещё
-          </button>
-        </div>
-      )}
-    </div>
+                  >
+                    {boardLoadingMore && <Loader2 size={18} className="animate-spin" />}
+                    Показать ещё
+                  </button>
+                </div>
+              )}
+            </div>
 
-    {/* ФИКСИРОВАННЫЙ СКРОЛЛБАР ВНИЗУ ЭКРАНА */}
-    {boardScrollWidth > boardViewportWidth + 2 &&
-      createPortal(
-        <div style={fixedBoardScrollbarStyle} className="px-1">
-          <div
-            ref={bottomTrackRef}
-            onClick={handleScrollbarTrackClick}
-            className="relative h-3 rounded-full bg-[var(--hover-2)] border border-[var(--border-color)] cursor-pointer select-none"
-          >
-            <div
-              data-scroll-thumb="true"
-              onPointerDown={handleScrollbarPointerDown}
-              onPointerMove={handleScrollbarPointerMove}
-              onPointerUp={handleScrollbarPointerUp}
-              onPointerCancel={handleScrollbarPointerUp}
-              className="absolute top-[1px] bottom-[1px] left-0 rounded-full bg-[var(--text-primary)]/20 cursor-grab active:cursor-grabbing touch-none will-change-transform"
-              style={{
-                width: `${scrollbarThumbPercentRef.current}%`,
-                transform: 'translateX(0px)',
-              }}
-            />
-          </div>
-        </div>,
-        document.body
-      )}
-  </>
-) : (
-    <>
-      {/* Desktop */}
-      <div className="hidden lg:block rounded-xl border border-[var(--border-color)] relative overflow-visible">
-        <TableHeader showAssigneeCol={showAssigneeCol || showReporterCol} />
-        <div className="divide-y divide-[var(--border-color)]/40 px-1 py-1">
-          {shownTickets.map(ticket => (
-            <TicketRow
-              key={ticket.id}
-              ticket={ticket}
-              showAssignee={showAssigneeCol}
-              showReporter={showReporterCol}
-              onTicketUpdated={loadTickets}
-              onNavigate={(id) => saveScrollState(id)}
-              highlighted={highlightTicketId === ticket.id}
-            />
-          ))}
-        </div>
-      </div>
+            {/* ФИКСИРОВАННЫЙ СКРОЛЛБАР ВНИЗУ ЭКРАНА */}
+            {boardScrollWidth > boardViewportWidth + 2 &&
+              createPortal(
+                <div style={fixedBoardScrollbarStyle} className="px-1">
+                  <div
+                    ref={bottomTrackRef}
+                    onClick={handleScrollbarTrackClick}
+                    className="relative h-3 rounded-full bg-[var(--hover-2)] border border-[var(--border-color)] cursor-pointer select-none"
+                  >
+                    <div
+                      data-scroll-thumb="true"
+                      onPointerDown={handleScrollbarPointerDown}
+                      onPointerMove={handleScrollbarPointerMove}
+                      onPointerUp={handleScrollbarPointerUp}
+                      onPointerCancel={handleScrollbarPointerUp}
+                      className="absolute top-[1px] bottom-[1px] left-0 rounded-full bg-[var(--text-primary)]/20 cursor-grab active:cursor-grabbing touch-none will-change-transform"
+                      style={{
+                        width: `${scrollbarThumbPercentRef.current}%`,
+                        transform: 'translateX(0px)',
+                      }}
+                    />
+                  </div>
+                </div>,
+                document.body
+              )}
+          </>
+        ) : (
+          <>
+            {/* Desktop */}
+            <div className="hidden lg:block rounded-xl border border-[var(--border-color)] relative overflow-visible">
+              <TableHeader showAssigneeCol={showAssigneeCol || showReporterCol} />
+              <div className="divide-y divide-[var(--border-color)]/40 px-1 py-1">
+                {shownTickets.map(ticket => (
+                  <TicketRow
+                    key={ticket.id}
+                    ticket={ticket}
+                    showAssignee={showAssigneeCol}
+                    showReporter={showReporterCol}
+                    onTicketUpdated={loadTickets}
+                    onNavigate={(id) => saveScrollState(id)}
+                    highlighted={highlightTicketId === ticket.id}
+                  />
+                ))}
+              </div>
+            </div>
 
-      {/* Mobile */}
-      <div className="lg:hidden space-y-2">
-        {shownTickets.map(ticket => (
-          // тут оставь твой текущий mobile render (тот, что был)
-          <div key={ticket.id} />
-        ))}
-      </div>
+            {/* Mobile */}
+            <div className="lg:hidden space-y-2">
+              {shownTickets.map(ticket => (
+                // тут оставь твой текущий mobile render (тот, что был)
+                <div key={ticket.id} />
+              ))}
+            </div>
 
-      {/* Pagination только для списка */}
-{totalPages > 1 && (
-  <div className="flex items-center justify-center gap-2 pt-4 border-t border-[var(--border-color)]">
-    <button
-      onClick={() => handlePageChange(Math.max(1, page - 1))}
-      disabled={page === 1}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card
+            {/* Pagination только для списка */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4 border-t border-[var(--border-color)]">
+                <button
+                  onClick={() => handlePageChange(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card
                  border border-[var(--border-color)] hover:bg-[var(--hover-2)]
                  disabled:opacity-40 disabled:cursor-not-allowed
                  text-[var(--text-primary)] text-base transition-colors"
-    >
-      <ChevronLeft className="w-4 h-4" /> Назад
-    </button>
+                >
+                  <ChevronLeft className="w-4 h-4" /> Назад
+                </button>
 
-    <div className="flex items-center gap-1.5">
-      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-        const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-        if (pageNum > totalPages) return null;
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
+                    if (pageNum > totalPages) return null;
 
-        return (
-          <button
-            key={pageNum}
-            onClick={() => handlePageChange(pageNum)}
-            className={`w-10 h-10 rounded-xl text-base font-medium transition-colors
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-10 h-10 rounded-xl text-base font-medium transition-colors
               ${pageNum === page
-                ? 'bg-[var(--accent)] text-white'
-                : 'glass-card text-[var(--text-primary)]/60 border border-[var(--border-color)] hover:bg-[var(--hover-2)]'
-              }`}
-          >
-            {pageNum}
-          </button>
-        );
-      })}
-    </div>
+                            ? 'bg-[var(--accent)] text-white'
+                            : 'glass-card text-[var(--text-primary)]/60 border border-[var(--border-color)] hover:bg-[var(--hover-2)]'
+                          }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
 
-    <button
-      onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
-      disabled={page === totalPages}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card
+                <button
+                  onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card
                  border border-[var(--border-color)] hover:bg-[var(--hover-2)]
                  disabled:opacity-40 disabled:cursor-not-allowed
                  text-[var(--text-primary)] text-base transition-colors"
-    >
-      Вперёд <ChevronRight className="w-4 h-4" />
-    </button>
-  </div>
-)}
-    </>
-  )
-) : null}
+                >
+                  Вперёд <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </>
+        )
+      ) : null}
     </div>
   );
 }

@@ -2,10 +2,12 @@ from typing import override
 
 from uuid import UUID
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import Select, and_, exists, or_, select
 
 from src.shared.infra.repos import ModelMapper, SqlAlchemyRepository
 from src.shared.schemas import Page, Pagination
+
+from ..domain.dtos import ProjectFilters
 
 from ..domain.entities import Project, ProjectMember, ProjectStage
 from ..domain.vo import MemberRole, ProjectKey
@@ -158,7 +160,32 @@ class SqlProjectRepository(SqlAlchemyRepository[Project, ProjectOrm]):
             stmt = stmt.where(or_(self.model.owner_id == user_id, membership_exists))
 
         return await self._paginate(stmt, pagination)
+    
 
+    def _apply_project_filters(
+        self, stmt: Select[tuple[ProjectOrm]], filters: ProjectFilters,
+    ) -> Select[tuple[ProjectOrm]]:
+        if filters.counterparty_id:
+            stmt = stmt.where(self.model.counterparty_id == filters.counterparty_id)
+
+        if filters.statuses:
+            stmt = stmt.where(self.model.status.in_(filters.statuses))
+
+        if filters.search_query:
+            stmt = stmt.where(self.model.name.ilike(f"%{filters.search_query}%"))
+
+        return stmt
+
+
+    async def paginate(
+        self, pagination: Pagination, filters: ProjectFilters | None = None,
+    ) -> Page[Project]:
+        stmt = select(self.model)
+
+        if filters is not None:
+            stmt = self._apply_project_filters(stmt, filters)
+
+        return await self._paginate(stmt, pagination)
 
 class SqlProjectMemberRepository(SqlAlchemyRepository[ProjectMember, ProjectMemberOrm]):
     model = ProjectMemberOrm

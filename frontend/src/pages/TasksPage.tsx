@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import React, { memo } from 'react';
 
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -9,7 +9,7 @@ import {
   ArrowUpRight, ChevronDown, Flag, AlertCircle, CheckCircle2, Ban, RotateCcw,
   RefreshCw, Archive, FolderOpen, Ticket, Zap, Star, User, Layers, UserCheck,
   GitPullRequest, ThumbsUp, ThumbsDown, Pencil, List, LayoutGrid, Clock3,
-  FileText, File as FileIcon, Download, BarChart3, Trash2,Paperclip ,
+  FileText, File as FileIcon, Download, BarChart3, Trash2, Paperclip, ArrowRight, Mail
 } from 'lucide-react';
 import { tasksApi, projectsApi, ticketsApi, usersApi } from '../api/client';
 import { attachmentsApi } from '../api/attachments';
@@ -1055,8 +1055,8 @@ export const TCard = memo(function TCard({
     ? (a.full_name || a.username || '').split(' ')[0]
     : null;
 
-    const hasAttachments =
-  Array.isArray((t as any).attachments) && (t as any).attachments.length > 0;
+  const hasAttachments =
+    Array.isArray((t as any).attachments) && (t as any).attachments.length > 0;
 
   return (
     <div
@@ -1125,8 +1125,8 @@ export const TCard = memo(function TCard({
         <div className="flex items-center gap-1.5 shrink-0">
 
           {hasAttachments && (
-    <Paperclip className="w-4.5 h-4.5 text-[var(--text-primary)]/30" />
-  )}
+            <Paperclip className="w-4.5 h-4.5 text-[var(--text-primary)]/30" />
+          )}
           {t.ticket_id && (
             <Ticket className="w-4.5 h-4.5 text-[var(--text-primary)]/30" />
           )}
@@ -1496,15 +1496,15 @@ function TaskEditorModal({ mode, task, initSt, context, ticketLabel, onClose, on
 }) {
   const { toast } = useToast();
 
+  const navigate = useNavigate();
+  const [baseTicket, setBaseTicket] = useState<any | null>(null);
+  const [baseTicketCreator, setBaseTicketCreator] = useState<SimpleUser | null>(null);
 
-      const [baseTicket, setBaseTicket] = useState<any | null>(null);
-const [baseTicketCreator, setBaseTicketCreator] = useState<SimpleUser | null>(null);
-
-const requesterLabel =
-  baseTicketCreator?.full_name ||
-  baseTicketCreator?.username ||
-  baseTicketCreator?.email ||
-  (baseTicket?.created_by ? `ID: ${baseTicket.created_by}` : '');
+  const requesterLabel =
+    baseTicketCreator?.full_name ||
+    baseTicketCreator?.username ||
+    baseTicketCreator?.email ||
+    (baseTicket?.created_by ? `ID: ${baseTicket.created_by}` : '');
 
   const [deleteAttachmentIntent, setDeleteAttachmentIntent] =
     useState<TaskAttachment | null>(null);
@@ -1549,7 +1549,7 @@ const requesterLabel =
 
   const firstProjectChange = useRef(true);
 
-  
+
 
   useEffect(() => {
     if (!assigneeId && todo) setTodo(false);
@@ -1751,43 +1751,43 @@ const requesterLabel =
     return result;
   };
 
-useEffect(() => {
-  if (mode !== 'create' || context.type !== 'ticket' || !context.ticket_id) return;
+  useEffect(() => {
+    if (mode !== 'create' || context.type !== 'ticket' || !context.ticket_id) return;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  (async () => {
-    try {
-      setBaseTicket(null);
-      setBaseTicketCreator(null);
+    (async () => {
+      try {
+        setBaseTicket(null);
+        setBaseTicketCreator(null);
 
-      const ticket = await ticketsApi.getById(context.ticket_id);
-      if (cancelled) return;
+        const ticket = await ticketsApi.getById(context.ticket_id);
+        if (cancelled) return;
 
-      setBaseTicket(ticket);
+        setBaseTicket(ticket);
 
-      if (ticket.project_id) {
-        setProjectId(ticket.project_id);
-        firstProjectChange.current = true;
-      }
+        if (ticket.project_id) {
+          setProjectId(ticket.project_id);
+          firstProjectChange.current = true;
+        }
 
-      if (ticket.priority) {
-        setPri(ticket.priority as TaskPriority);
-      }
+        if (ticket.priority) {
+          setPri(ticket.priority as TaskPriority);
+        }
 
-      if (ticket.created_by) {
-        try {
-          const u = await usersApi.getById(ticket.created_by); // важно: чтобы этот метод был добавлен
-          if (!cancelled) setBaseTicketCreator(u);
-        } catch {}
-      }
-    } catch {}
-  })();
+        if (ticket.created_by) {
+          try {
+            const u = await usersApi.getById(ticket.created_by); // важно: чтобы этот метод был добавлен
+            if (!cancelled) setBaseTicketCreator(u);
+          } catch { }
+        }
+      } catch { }
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, [mode, context.type, context.ticket_id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, context.type, context.ticket_id]);
 
   const submit = async () => {
     if (!title.trim()) return;
@@ -2023,22 +2023,22 @@ useEffect(() => {
 
 
 
-const getTicketRequester = (t: any) => {
-  return (
-    t?.requester?.full_name ||
-    t?.requester?.email ||
-    t?.requester_name ||
-    t?.created_by_user?.full_name ||
-    t?.created_by_user?.email ||
-    t?.created_by?.full_name ||
-    t?.created_by?.email ||
-    t?.author?.full_name ||
-    t?.author?.email ||
-    t?.created_by_full_name ||
-    t?.created_by_email ||
-    ''
-  );
-};
+  const getTicketRequester = (t: any) => {
+    return (
+      t?.requester?.full_name ||
+      t?.requester?.email ||
+      t?.requester_name ||
+      t?.created_by_user?.full_name ||
+      t?.created_by_user?.email ||
+      t?.created_by?.full_name ||
+      t?.created_by?.email ||
+      t?.author?.full_name ||
+      t?.author?.email ||
+      t?.created_by_full_name ||
+      t?.created_by_email ||
+      ''
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 md:p-4">
@@ -2199,53 +2199,101 @@ const getTicketRequester = (t: any) => {
             {/* RIGHT */}
             <div className="space-y-4">
               {/* Проект */}
+              {/* Проект */}
               <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-1.5">Проект</label>
-                <AsyncDD
-                  value={projectId}
-                  onChange={setProjectId}
-                  loadFn={loadProjects}
-                  placeholder="Не выбран"
-                  icon={FolderOpen}
-                />
+                <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-1.5">
+                  Проект
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <AsyncDD
+                      value={projectId}
+                      onChange={setProjectId}
+                      loadFn={loadProjects}
+                      placeholder="Не выбран"
+                      icon={FolderOpen}
+                    />
+                  </div>
+
+                  {projectId && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/projects/${projectId}`)}
+                      title="Перейти к проекту"
+                      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center
+                   rounded-xl border border-[var(--border-color)]
+                   bg-[var(--hover-1)] text-[var(--text-primary)]/60
+                   transition-colors hover:bg-[var(--hover-2)] hover:text-[var(--accent)]"
+                    >
+                      <ArrowRight size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Заявка */}
               {!lockTicket && (
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-1.5">Заявка</label>
-                  <AsyncDD value={ticketId} onChange={setTicketId} loadFn={loadTickets} placeholder={projectId ? 'Выберите заявку' : 'Выберите заявку'} icon={Ticket} wide />
+                  <label className="block text-sm font-medium text-[var(--text-primary)]/70 mb-1.5">
+                    Заявка
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <AsyncDD
+                        value={ticketId}
+                        onChange={setTicketId}
+                        loadFn={loadTickets}
+                        placeholder="Выберите заявку"
+                        icon={Ticket}
+                        wide
+                      />
+                    </div>
+
+                    {ticketId && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/tickets/${ticketId}`)}
+                        title="Перейти к заявке"
+                        className="flex h-[42px] w-[42px] shrink-0 items-center justify-center
+                     rounded-xl border border-[var(--border-color)]
+                     bg-[var(--hover-1)] text-[var(--text-primary)]/60
+                     transition-colors hover:bg-[var(--hover-2)] hover:text-[var(--accent)]"
+                      >
+                        <ArrowRight size={18} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
               {lockTicket && (
-  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
-    <Ticket className="w-5 h-5 text-blue-400 shrink-0" />
-    <div className="min-w-0">
-      <p className="text-sm font-medium text-[var(--text-primary)]">
-        Создание на основании заявки
-      </p>
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
+                  <Ticket className="w-5 h-5 text-blue-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      Создание на основании заявки
+                    </p>
 
-     {baseTicket ? (
-  <>
-    <p className="text-xs text-blue-400  mt-0.5">
-      {baseTicket.number} — {baseTicket.title}
-    </p>
+                    {baseTicket ? (
+                      <>
+                        <p className="text-xs text-blue-400  mt-0.5">
+                          {baseTicket.number} — {baseTicket.title}
+                        </p>
 
-    {!!requesterLabel && (
-      <p className="text-xs text-[var(--text-primary)]/55 truncate">
-        от: {requesterLabel}
-      </p>
-    )}
-  </>
-) : (
-  <p className="text-xs text-blue-400 truncate mt-0.5">
-    {ticketLabel || 'Заявка будет привязана автоматически'}
-  </p>
-)}
-    </div>
-  </div>
-)}
+                        {!!requesterLabel && (
+                          <p className="text-xs text-[var(--text-primary)]/55 truncate">
+                            от: {requesterLabel}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-blue-400 truncate mt-0.5">
+                        {ticketLabel || 'Заявка будет привязана автоматически'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Приоритет */}
               <div>
@@ -2645,15 +2693,15 @@ function DetailModal({
               </span>
 
 
-{/* Context: Ticket + Project (вверху и подсвечено) */}
-            {(ticketPath || t.project_id) && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {t.project_id && (
-                  <Link
-                    to={`/projects/${t.project_id}`}
-                    onClick={onClose}
-                    title={t.project_name ?? 'Открыть проект'}
-                    className="
+              {/* Context: Ticket + Project (вверху и подсвечено) */}
+              {(ticketPath || t.project_id) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {t.project_id && (
+                    <Link
+                      to={`/projects/${t.project_id}`}
+                      onClick={onClose}
+                      title={t.project_name ?? 'Открыть проект'}
+                      className="
           group inline-flex items-center gap-2
           px-3 py-2 rounded-xl
           bg-amber-500/10 border border-amber-500/25
@@ -2661,27 +2709,27 @@ function DetailModal({
           hover:bg-amber-500/15 hover:border-amber-500/40
           transition-colors
         "
-                  >
-                    <FolderOpen className="w-4 h-4" />
-                    <div className="leading-tight">
-                      <div className="text-[10px] uppercase tracking-widest text-amber-300/80">
-                        Проект
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      <div className="leading-tight">
+                        <div className="text-[10px] uppercase tracking-widest text-amber-300/80">
+                          Проект
+                        </div>
+                        <div className="text-sm font-semibold max-w-[420px] truncate">
+                          {t.project_name || 'Открыть проект'}
+                        </div>
                       </div>
-                      <div className="text-sm font-semibold max-w-[420px] truncate">
-                        {t.project_name || 'Открыть проект'}
-                      </div>
-                    </div>
 
-                    <ArrowUpRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-                  </Link>
-                )}
+                      <ArrowUpRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+                    </Link>
+                  )}
 
-                {ticketPath && (
-                  <Link
-                    to={ticketPath}
-                    onClick={onClose}
-                    title={ticketNo ?? 'Открыть заявку'}
-                    className="
+                  {ticketPath && (
+                    <Link
+                      to={ticketPath}
+                      onClick={onClose}
+                      title={ticketNo ?? 'Открыть заявку'}
+                      className="
           group inline-flex items-center gap-2
           px-3 py-2 rounded-xl
           bg-violet-500/10 border border-violet-500/25
@@ -2689,22 +2737,22 @@ function DetailModal({
           hover:bg-violet-500/15 hover:border-violet-500/40
           transition-colors
         "
-                  >
-                    <Ticket className="w-4 h-4" />
-                    <div className="leading-tight">
-                      <div className="text-[10px] uppercase tracking-widest text-violet-200/80">
-                        Заявка
+                    >
+                      <Ticket className="w-4 h-4" />
+                      <div className="leading-tight">
+                        <div className="text-[10px] uppercase tracking-widest text-violet-200/80">
+                          Заявка
+                        </div>
+                        <div className="text-sm font-semibold truncate">
+                          {ticketNo ?? 'Открыть заявку'}
+                        </div>
                       </div>
-                      <div className="text-sm font-semibold truncate">
-                        {ticketNo ?? 'Открыть заявку'}
-                      </div>
-                    </div>
 
-                    <ArrowUpRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-                  </Link>
-                )}
-              </div>
-            )}
+                      <ArrowUpRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+                    </Link>
+                  )}
+                </div>
+              )}
 
 
 
@@ -2714,7 +2762,7 @@ function DetailModal({
               {t.title}
             </h2>
 
-            
+
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -2860,7 +2908,7 @@ function DetailModal({
                 </section>
               )}
 
-              
+
             </div>
 
             {/* RIGHT */}
@@ -3479,6 +3527,7 @@ function DetailModal({
 /* ───────────────── main page ───────────────── */
 
 export default function TasksPage() {
+  const navigate = useNavigate();
   const [sp] = useSearchParams();
   const { user } = useAuthStore();
   const { toast } = useToast();
@@ -3529,6 +3578,7 @@ export default function TasksPage() {
   const [selT, setSelT] = useState(ut ?? '');
   const [selTLabel, setSelTLabel] = useState('');
   const ticketLabelsRef = useRef<Record<string, string>>({});
+  const ticketNumbersRef = useRef<Record<string, string>>({});
 
   const [umap, setUmap] = useState<Map<string, SimpleUser | CounterpartyCustomer>>(new Map());
   const [cols, setCols] = useState<TaskViewColumn[]>([]);
@@ -3614,6 +3664,7 @@ export default function TasksPage() {
 
   const [completeIntent, setCompleteIntent] = useState<CompleteIntent | null>(null);
   const [completeLd, setCompleteLd] = useState(false);
+  const [profileUser, setProfileUser] = useState<SimpleUser | CounterpartyCustomer | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
 
@@ -4087,6 +4138,7 @@ export default function TasksPage() {
       const items = r.items.map((t: any) => {
         const label = `${t.number} — ${t.title}`;
         ticketLabelsRef.current[t.id] = label;
+        ticketNumbersRef.current[t.id] = t.number;
         return { value: t.id, label };
       });
       return { items, hasNext: r.items.length === 20 };
@@ -4239,8 +4291,8 @@ export default function TasksPage() {
             <button
               onClick={() => setSf((v) => !v)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${hf
-                  ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]'
-                  : 'bg-[var(--hover-2)] border-[var(--border-color)] text-[var(--text-primary)]/60 hover:bg-[var(--hover-3)]'
+                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]'
+                : 'bg-[var(--hover-2)] border-[var(--border-color)] text-[var(--text-primary)]/60 hover:bg-[var(--hover-3)]'
                 }`}
             >
               <Filter className="w-4 h-4" />
@@ -4265,8 +4317,8 @@ export default function TasksPage() {
                               setFp((v) => (v.includes(p.value) ? v.filter((x) => x !== p.value) : [...v, p.value]))
                             }
                             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-all ${fp.includes(p.value)
-                                ? `${m.bg} ${m.c} ${m.brd}`
-                                : 'bg-[var(--hover-1)] text-[var(--text-primary)]/50 border-[var(--border-color)] hover:bg-[var(--hover-2)]'
+                              ? `${m.bg} ${m.c} ${m.brd}`
+                              : 'bg-[var(--hover-1)] text-[var(--text-primary)]/50 border-[var(--border-color)] hover:bg-[var(--hover-2)]'
                               }`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
@@ -4336,8 +4388,8 @@ export default function TasksPage() {
                   key={t.id}
                   onClick={() => setMode(t.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${mode === t.id
-                      ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                      : 'text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/80 hover:bg-[var(--hover-2)]'
+                    ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+                    : 'text-[var(--text-primary)]/50 hover:text-[var(--text-primary)]/80 hover:bg-[var(--hover-2)]'
                     }`}
                 >
                   <I className="w-3.5 h-3.5" />
@@ -4348,40 +4400,92 @@ export default function TasksPage() {
           </div>
 
           {mode === 'project' && (
-            <div className="w-72">
-              <AsyncDD
-                value={selP}
-                onChange={setSelP}
-                loadFn={ldProjAsync}
-                placeholder="Выберите проект"
-                icon={FolderOpen}
-              />
+            <div className="flex items-center gap-2">
+              <div className="w-72">
+                <AsyncDD
+                  value={selP}
+                  onChange={setSelP}
+                  loadFn={ldProjAsync}
+                  placeholder="Выберите проект"
+                  icon={FolderOpen}
+                />
+              </div>
+
+              {selP && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/projects/${selP}`)}
+                  title="Перейти к проекту"
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center
+                   rounded-xl border border-[var(--border-color)]
+                   bg-[var(--hover-2)] text-[var(--text-primary)]/60
+                   transition-colors hover:bg-[var(--hover-3)] hover:text-[var(--accent)]"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
           {mode === 'ticket' && (
-            <div className="w-80">
-              <AsyncDD
-                value={selT}
-                onChange={(v) => {
-                  setSelT(v);
-                  setSelTLabel(v ? ticketLabelsRef.current[v] ?? '' : '');
-                }}
-                loadFn={ldTicketsAsync}
-                placeholder="Выберите заявку"
-                icon={Ticket}
-                wide
-              />
+            <div className="flex items-center gap-2">
+              <div className="w-80">
+                <AsyncDD
+                  value={selT}
+                  onChange={(v) => {
+                    setSelT(v);
+                    setSelTLabel(v ? ticketLabelsRef.current[v] ?? '' : '');
+                  }}
+                  loadFn={ldTicketsAsync}
+                  placeholder="Выберите заявку"
+                  icon={Ticket}
+                  wide
+                />
+              </div>
+
+              {selT && ticketNumbersRef.current[selT] && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/tickets/${ticketNumbersRef.current[selT]}`)}
+                  title="Перейти к заявке"
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center
+               rounded-xl border border-[var(--border-color)]
+               bg-[var(--hover-2)] text-[var(--text-primary)]/60
+               transition-colors hover:bg-[var(--hover-3)] hover:text-[var(--accent)]"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
           {mode === 'assignee' && (
-            <div className="w-72">
-              <AsyncDD
-                value={selA}
-                onChange={setSelA}
-                loadFn={ldAssAsync}
-                placeholder="Выберите исполнителя"
-                icon={UserCheck}
-              />
+            <div className="flex items-center gap-2">
+              <div className="w-72">
+                <AsyncDD
+                  value={selA}
+                  onChange={setSelA}
+                  loadFn={ldAssAsync}
+                  placeholder="Выберите исполнителя"
+                  icon={UserCheck}
+                />
+              </div>
+
+              {selA && (() => {
+                const u = umap.get(selA);
+                if (!u) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setProfileUser(u)}
+                    title="Показать профиль"
+                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center
+                     rounded-xl border border-[var(--border-color)]
+                     bg-[var(--hover-2)] text-[var(--text-primary)]/60
+                     transition-colors hover:bg-[var(--hover-3)] hover:text-[var(--accent)]"
+                  >
+                    <User className="w-4 h-4" />
+                  </button>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -4390,8 +4494,8 @@ export default function TasksPage() {
           <button
             onClick={() => setViewMode('kanban')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'kanban'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
+              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+              : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
               }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
@@ -4401,8 +4505,8 @@ export default function TasksPage() {
           <button
             onClick={() => setViewMode('list')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'list'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
+              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+              : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
               }`}
           >
             <List className="w-3.5 h-3.5" />
@@ -4413,8 +4517,8 @@ export default function TasksPage() {
             type="button"
             onClick={() => setViewMode('analytics')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'analytics'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
+              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+              : 'text-[var(--text-primary)]/50 hover:bg-[var(--hover-2)]'
               }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
@@ -4518,7 +4622,7 @@ export default function TasksPage() {
                 onPointerMove={handleScrollbarPointerMove}
                 onPointerUp={handleScrollbarPointerUp}
                 onPointerCancel={handleScrollbarPointerUp}
-                className="absolute top-[1px] bottom-[1px] left-0 rounded-full bg-[var(--bg-card)]/95 cursor-grab active:cursor-grabbing touch-none will-change-transform"
+                className="absolute top-[1px] bottom-[1px] left-0 rounded-full bg-[var(--text-primary)]/20 cursor-grab active:cursor-grabbing touch-none will-change-transform"
                 style={{
                   width: `${scrollbarThumbPercentRef.current}%`,
                   transform: 'translateX(0px)',
@@ -4649,6 +4753,96 @@ export default function TasksPage() {
           }}
           onOk={handleComplete}
         />
+      )}
+
+      {profileUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setProfileUser(null)}
+          />
+
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
+              <h2 className="text-base font-bold text-[var(--text-primary)]">
+                Профиль исполнителя
+              </h2>
+              <button
+                type="button"
+                onClick={() => setProfileUser(null)}
+                className="rounded-lg p-2 text-[var(--text-primary)]/40 hover:bg-[var(--hover-2)] hover:text-[var(--text-primary)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="flex items-center gap-4">
+                {profileUser.avatar_url ? (
+                  <img
+                    src={profileUser.avatar_url}
+                    alt=""
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)]/15 text-[var(--accent)]">
+                    <User className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-[var(--text-primary)]">
+                    {profileUser.full_name || profileUser.username || '—'}
+                  </p>
+                  {profileUser.email && (
+                    <p className="truncate text-sm text-[var(--text-primary)]/50">
+                      {profileUser.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {'roles' in profileUser && profileUser.roles && profileUser.roles.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs uppercase tracking-wider text-[var(--text-primary)]/40">
+                    Роли
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profileUser.roles.map((r) => (
+                      <span
+                        key={r}
+                        className="rounded-lg border border-[var(--border-color)] bg-[var(--hover-1)] px-2 py-0.5 text-xs text-[var(--text-primary)]/70"
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {profileUser.email && (
+                <div className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--hover-1)]/40 px-3 py-2.5">
+                  <Mail className="h-4 w-4 shrink-0 text-[var(--text-primary)]/40" />
+                  <a
+                    href={`mailto:${profileUser.email}`}
+                    className="truncate text-sm text-[var(--accent)] hover:underline"
+                  >
+                    {profileUser.email}
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-[var(--border-color)] px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setProfileUser(null)}
+                className="rounded-xl bg-[var(--hover-2)] px-4 py-2 text-sm font-medium text-[var(--text-primary)]/70 hover:bg-[var(--hover-3)]"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

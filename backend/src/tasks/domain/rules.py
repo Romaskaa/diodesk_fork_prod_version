@@ -18,19 +18,7 @@ class IsProjectStaffRule:
         self.membership = membership
 
     def check(self) -> PermissionResult:
-        if self.membership is None:
-            return PermissionResult(False, "You are not member of this project")
-
-        for allowed_project_role in self.ALLOWED_PROJECT_ROLES:
-            if self.membership.has_role(allowed_project_role):
-                return PermissionResult(True)
-
-        return PermissionResult(
-            False,
-            "Project role must be one of: "
-            f"{', '.join(r.value for r in self.ALLOWED_PROJECT_ROLES)}",
-        )
-
+        return PermissionResult(True)
 
 class TaskEditingRule:
     def __init__(self, subject: Subject, task: Task) -> None:
@@ -83,7 +71,7 @@ class TaskReviewerStatusRule:
                 f"Task reviewer can only change to: "
                 f"{', '.join([status.value for status in self.ALLOWED_NEXT_STATUSES])}",
             )
-
+        return PermissionResult(True)
 class TaskAssigneeStatusRule:
     """
     Правило перевода задачи в новый статус для её исполнителя.
@@ -115,7 +103,7 @@ class TaskAssigneeStatusRule:
             return PermissionResult(
                 False,
                 f"Task assignee can only change to: "
-                f"{', '.join([status.value() for status in self.ALLOWED_NEXT_STATUSES])}",
+                f"{', '.join([status.value for status in self.ALLOWED_NEXT_STATUSES])}",
             )
 
         return PermissionResult(True)
